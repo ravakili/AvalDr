@@ -1,0 +1,73 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== Base / RTL ===== */
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'Vazirmatn', Tahoma, sans-serif;
+  direction: rtl;
+  text-align: right;
+  color: #1d232c;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  background-color: #eef4f9;
+  background-image: radial-gradient(
+      circle at 18% 18%,
+      rgba(116, 201, 220, 0.45) 0%,
+      transparent 42%
+    ),
+    radial-gradient(circle at 82% 8%, rgba(171, 224, 234, 0.55) 0%, transparent 40%),
+    radial-gradient(circle at 50% 100%, rgba(63, 174, 201, 0.28) 0%, transparent 55%),
+    linear-gradient(135deg, #eef4f9 0%, #e7f0f5 100%);
+  background-attachment: fixed;
+}
+
+/* Persian numerals wherever we like */
+.tabular {
+  font-feature-settings: 'ss01';
+}
+
+/* ===== Scrollbar ===== */
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(33, 150, 179, 0.35);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(33, 150, 179, 0.55);
+}
+
+/* ===== Reusable component classes ===== */
+@layer components {
+  /* GlassCard surface */
+  .glass {
+    @apply border border-white/40 bg-white/50 backdrop-blur-xl shadow-glass;
+  }
+  .glass-soft {
+    @apply border border-white/30 bg-white/40 backdrop-blur-md shadow-glass-sm;
+  }
+  .glass-dark {
+    @apply border border-white/10 bg-white/10 backdrop-blur-lg;
+  }
+  .glass-input {
+    @apply border border-white/60 bg-white/60 backdrop-blur-md placeholder:text-ink-400;
+  }
+
+  /* Hover lift helper */
+  .lift {
+    @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-glass;
+  }
+}

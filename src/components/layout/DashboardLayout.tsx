@@ -1,0 +1,111 @@
+import { useState } from "react";
+import { Outlet, useLocation } from "react-router-dom";
+import Sidebar from "./Sidebar";
+import Topbar from "./Topbar";
+import MobileBottomNav from "./MobileBottomNav";
+import type { Role } from "../../types";
+
+const titles: Record<string, { title: string; subtitle?: string }> = {
+  "/user": {
+    title: "سلام، محمد 👋",
+    subtitle: "امروز چه کمکی از ما ساخته است؟",
+  },
+  "/user/doctors": {
+    title: "جستجوی پزشک",
+    subtitle: "بهترین متخصص‌ها را پیدا کنید",
+  },
+  "/user/book": {
+    title: "دریافت نوبت",
+    subtitle: "روز و ساعت مناسب خود را انتخاب کنید",
+  },
+  "/user/appointments": {
+    title: "نوبت‌های من",
+    subtitle: "مدیریت نوبت‌های قبلی و آینده",
+  },
+  "/user/profile": { title: "پروفایل", subtitle: "اطلاعات حساب کاربری و پرونده" },
+  "/doctor": {
+    title: "سلام، دکتر سارا 👋",
+    subtitle: "برنامه امروز شما آماده است",
+  },
+  "/doctor/appointments": {
+    title: "نوبت‌ها",
+    subtitle: "لیست بیماران و زمان نوبت‌ها",
+  },
+  "/doctor/consult": {
+    title: "اتاق مشاوره",
+    subtitle: "گفتگو با بیمار و صدور نسخه",
+  },
+  "/doctor/patients": {
+    title: "مدیریت بیماران",
+    subtitle: "پرونده و سوابق بیماران شما",
+  },
+  "/doctor/profile": {
+    title: "پروفایل حرفه‌ای",
+    subtitle: "تنظیمات کاری و تخصص",
+  },
+  "/admin": { title: "داشبورد مدیریت", subtitle: "نمای کلی سیستم دکتر سینا" },
+  "/admin/doctors": {
+    title: "مدیریت پزشکان",
+    subtitle: "تأیید، تعلیق و مدیریت پزشکان",
+  },
+  "/admin/users": { title: "مدیریت کاربران", subtitle: "حساب‌های بیماران" },
+  "/admin/specialties": { title: "تخصص‌ها", subtitle: "مدیریت حوزه‌های تخصصی" },
+  "/admin/logs": { title: "لاگ نوبت‌ها", subtitle: "سوابق و گزارش فعالیت‌ها" },
+  "/admin/withdrawals": { title: "درخواست‌های برداشت", subtitle: "مدیریت تسویه پزشکان" },
+  "/admin/settings": { title: "تنظیمات سیستم", subtitle: "پیکربندی پلتفرم" },
+};
+
+interface Props {
+  role: Role;
+}
+
+export default function DashboardLayout({ role }: Props) {
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const { pathname } = useLocation();
+
+  // Match the longest prefix we know about (handles nested routes like /user/book/:id)
+  const key =
+    Object.keys(titles)
+      .filter((k) => pathname.startsWith(k))
+      .sort((a, b) => b.length - a.length)[0] || `/${role}`;
+
+  const meta = titles[key] || titles[`/${role}`];
+
+  return (
+    <div className="flex min-h-screen gap-5 p-4 lg:p-6">
+      {/* Sidebar (desktop) */}
+      <div className="sticky top-4 hidden h-[calc(100vh-2rem)] shrink-0 lg:block">
+        <Sidebar role={role} />
+      </div>
+
+      {/* Sidebar (mobile drawer) */}
+      {mobileOpen && (
+        <div className="fixed inset-0 z-40 lg:hidden">
+          <div
+            className="absolute inset-0 bg-ink-900/30 backdrop-blur-sm"
+            onClick={() => setMobileOpen(false)}
+          />
+          <div className="absolute right-0 top-0 h-full w-72 animate-fade-in p-3">
+            <Sidebar role={role} onNavigate={() => setMobileOpen(false)} />
+          </div>
+        </div>
+      )}
+
+      {/* Main */}
+      <main className="flex min-w-0 flex-1 flex-col">
+        <Topbar
+          role={role}
+          title={meta.title}
+          subtitle={meta.subtitle}
+          onMenu={() => setMobileOpen(true)}
+        />
+        <div className="flex-1 animate-fade-in pb-24 lg:pb-0">
+          <Outlet />
+        </div>
+      </main>
+
+      {/* Mobile bottom navbar */}
+      <MobileBottomNav role={role} />
+    </div>
+  );
+}
