@@ -4,6 +4,7 @@ import type {
   ChatMessage,
   Doctor,
   MedicalRecord,
+  MockUser,
   Patient,
   PlatformSetting,
   Prescription,
@@ -71,7 +72,7 @@ export const doctors: Doctor[] = [
     fee: 300000,
     status: 'approved',
     bio: 'نورولوژیست با تخصص در میگرن و اختلالات خواب.',
-    workingHours: [{ day: 'یکشنبه', from: '09:00', to: '15:00' }],
+    workingHours: [{ day: 'یکشنبه', from: '09:00', to: '15:00'     }],
   },
   {
     id: 'doc-3',
@@ -87,7 +88,7 @@ export const doctors: Doctor[] = [
     fee: 200000,
     status: 'approved',
     bio: 'متخصص پوست، مو و زیبایی. درمان جوش و لک.',
-    workingHours: [{ day: 'سه‌شنبه', from: '16:00', to: '20:00' }],
+    workingHours: [{ day: 'سه‌شنبه', from: '16:00', to: '20:00'     }],
   },
   {
     id: 'doc-4',
@@ -103,7 +104,7 @@ export const doctors: Doctor[] = [
     fee: 280000,
     status: 'approved',
     bio: 'ارتوپد و جراح زانو با سابقه بین‌المللی.',
-    workingHours: [{ day: 'چهارشنبه', from: '08:00', to: '12:00' }],
+    workingHours: [{ day: 'چهارشنبه', from: '08:00', to: '12:00'     }],
   },
   {
     id: 'doc-5',
@@ -119,7 +120,7 @@ export const doctors: Doctor[] = [
     fee: 220000,
     status: 'approved',
     bio: 'پزشک متخصص اطفال و نوزادان.',
-    workingHours: [{ day: 'شنبه', from: '10:00', to: '16:00' }],
+    workingHours: [{ day: 'شنبه', from: '10:00', to: '16:00'     }],
   },
   {
     id: 'doc-6',
@@ -135,7 +136,7 @@ export const doctors: Doctor[] = [
     fee: 190000,
     status: 'pending',
     bio: 'متخصص گوش، حلق و بینی در انتظار تأیید پروفایل.',
-    workingHours: [{ day: 'یکشنبه', from: '08:00', to: '13:00' }],
+    workingHours: [{ day: 'یکشنبه', from: '08:00', to: '13:00'     }],
   },
   {
     id: 'doc-7',
@@ -151,7 +152,7 @@ export const doctors: Doctor[] = [
     fee: 260000,
     status: 'suspended',
     bio: 'چشم پزشک و جراح لیزیک.',
-    workingHours: [{ day: 'سه‌شنبه', from: '09:00', to: '14:00' }],
+    workingHours: [{ day: 'سه‌شنبه', from: '09:00', to: '14:00'     }],
   },
   {
     id: 'doc-8',
@@ -167,7 +168,7 @@ export const doctors: Doctor[] = [
     fee: 350000,
     status: 'approved',
     bio: 'روان پزشک متخصص اضطراب و افسردگی.',
-    workingHours: [{ day: 'شنبه', from: '14:00', to: '20:00' }],
+    workingHours: [{ day: 'شنبه', from: '14:00', to: '20:00'     }],
   },
 ]
 
@@ -511,3 +512,32 @@ export const revenueData = [
 export const getDoctor = (id: string) => doctors.find((d) => d.id === id)
 export const getPatient = (id: string) => patients.find((p) => p.id === id)
 export const getSpecialty = (id: string) => specialties.find((s) => s.id === id)
+
+// ===== Auth mock users (built from doctors + patients + admin) =====
+export const mockUsers: MockUser[] = [
+  ...doctors.map((d) => ({
+    phone: d.phone,
+    role: 'doctor' as const,
+    name: d.name,
+    documents: null,
+  })),
+  ...patients.map((p) => ({
+    phone: p.phone,
+    role: 'user' as const,
+    name: p.name,
+    documents: null,
+  })),
+  {
+    phone: '09123456788',
+    role: 'admin' as const,
+    name: 'مدیر سیستم',
+    documents: null,
+  },
+]
+
+export const findUserByPhone = (phone: string): MockUser | undefined =>
+  mockUsers.find((u) => u.phone === phone)
+
+export const addUser = (user: MockUser) => {
+  mockUsers.push(user)
+}

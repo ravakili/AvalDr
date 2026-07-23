@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import type { Role, User, UserData, UploadingFile } from '../types'
-import { findUserByPhone, addUser } from '../data/mockUsers'
+import { findUserByPhone, addUser } from '../data/mockData'
 
 interface AuthState {
   user: User | null

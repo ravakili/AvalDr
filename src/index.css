@@ -71,3 +71,15 @@ body {
     @apply transition-all duration-300 hover:-translate-y-1 hover:shadow-glass;
   }
 }
+
+/* ===== Utilities ===== */
+@layer utilities {
+  /* Hide scrollbars but keep touch/trackpad scrolling usable (used by ScrollRail) */
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+}

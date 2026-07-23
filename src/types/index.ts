@@ -29,7 +29,7 @@ export interface Doctor extends Person {
   fee: number // toman
   status: 'approved' | 'pending' | 'suspended'
   bio: string
-  workingHours: { day: string; from: string; to: string }[]
+  workingHours: { day: string; from: string; to: string; breakMinutes?: number }[]
   verified?: boolean
   credentials?: string // URL to document
 }
@@ -50,7 +50,7 @@ export interface MedicalRecord {
   documents?: { id: string; name: string; type: string; url: string; uploadedAt: string }[]
 }
 
-export type AppointmentStatus = 'waiting' | 'completed' | 'cancelled' | 'in-progress' | 'pending-approval'
+export type AppointmentStatus = 'waiting' | 'completed' | 'cancelled' | 'in-progress' | 'pending-approval' | 'pending-payment'
 
 export interface Appointment {
   id: string
