@@ -84,7 +84,7 @@ export default function OTPVerification() {
     setError("");
     const newCode = Math.floor(100000 + Math.random() * 900000).toString();
     useAuthStore.setState({ otpCode: newCode });
-    console.info("[Dr.Saina Mock OTP]", `کد جدید برای ${phone}: ${newCode}`);
+    console.info("[AvalDr Mock OTP]", `کد جدید برای ${phone}: ${newCode}`);
   };
 
   const handleBack = () => {

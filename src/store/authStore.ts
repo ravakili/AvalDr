@@ -109,7 +109,7 @@ export const useAuthStore = create<AuthState>()(
         set({ isLoading: true, phone, otpCode: "" });
         await wait(1500);
         const code = Math.floor(100000 + Math.random() * 900000).toString();
-        console.info("[Dr.Saina Mock OTP]", `کد تایید برای ${phone}: ${code}`);
+        console.info("[AvalDr Mock OTP]", `کد تایید برای ${phone}: ${code}`);
         const existing = findUserByPhone(phone);
         set({
           otpCode: code,

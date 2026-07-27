@@ -441,7 +441,7 @@ export const platformSettings: PlatformSetting[] = [
   { key: 'allow_audio_consult', label: 'فعال‌سازی مشاوره صوتی', value: 'true', type: 'toggle' },
   { key: 'auto_approve_doctors', label: 'تأیید خودکار پزشکان', value: 'false', type: 'toggle' },
   { key: 'platform_currency', label: 'واحد پول', value: 'toman', type: 'select', options: ['toman', 'rial', 'dollar'] },
-  { key: 'support_email', label: 'ایمیل پشتیبانی', value: 'support@drsaina.ir', type: 'text' },
+  { key: 'support_email', label: 'ایمیل پشتیبانی', value: 'support@avaldr.ir', type: 'text' },
   { key: 'notification_sms', label: 'ارسال پیامک اعلان', value: 'true', type: 'toggle' },
   { key: 'cancellation_policy_hours', label: 'ساعت مجاز لغو قبل از نوبت', value: '2', type: 'number' },
 ]

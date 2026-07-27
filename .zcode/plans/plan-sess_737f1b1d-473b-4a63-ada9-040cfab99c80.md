@@ -1,1 +1,1 @@
-# Dr. Saina — Full Authentication Flow Implementation Plan 🏥
+# AvalDr — Full Authentication Flow Implementation Plan 🏥
