@@ -1,64 +1,72 @@
-import { Navigate, Route, Routes } from 'react-router-dom'
-import ProtectedRoute from './components/ProtectedRoute'
-import { useAuthStore } from './store/authStore'
+import { Navigate, Route, Routes } from "react-router-dom";
+import ProtectedRoute from "./components/ProtectedRoute";
+import { useAuthStore } from "./store/authStore";
 
 // Onboarding
-import PWAInstallGuide from './pages/onboarding/PWAInstallGuide'
-import WelcomeSlides from './pages/onboarding/WelcomeSlides'
+import PWAInstallGuide from "./pages/onboarding/PWAInstallGuide";
+import WelcomeSlides from "./pages/onboarding/WelcomeSlides";
 
 // Auth
-import Login from './pages/auth/Login'
-import OTPVerification from './pages/auth/OTPVerification'
-import ProfileCompletion from './pages/auth/ProfileCompletion'
+import Login from "./pages/auth/Login";
+import OTPVerification from "./pages/auth/OTPVerification";
+import ProfileCompletion from "./pages/auth/ProfileCompletion";
 
 // Shared layout
-import DashboardLayout from './components/layout/DashboardLayout'
+import DashboardLayout from "./components/layout/DashboardLayout";
 
 // User pages
-import UserHome from './pages/user/UserHome'
-import FindDoctors from './pages/user/FindDoctors'
-import BookAppointment from './pages/user/BookAppointment'
-import MyAppointments from './pages/user/MyAppointments'
-import UserProfile from './pages/user/UserProfile'
+import UserHome from "./pages/user/UserHome";
+import FindDoctors from "./pages/user/FindDoctors";
+import BookAppointment from "./pages/user/BookAppointment";
+import MyAppointments from "./pages/user/MyAppointments";
+import UserProfile from "./pages/user/UserProfile";
 
 // Doctor pages
-import DoctorOverview from './pages/doctor/DoctorOverview'
-import DoctorAppointments from './pages/doctor/DoctorAppointments'
-import Consultation from './pages/doctor/Consultation'
-import PatientManagement from './pages/doctor/PatientManagement'
-import DoctorProfile from './pages/doctor/DoctorProfile'
+import DoctorOverview from "./pages/doctor/DoctorOverview";
+import DoctorAppointments from "./pages/doctor/DoctorAppointments";
+import Consultation from "./pages/doctor/Consultation";
+import PatientManagement from "./pages/doctor/PatientManagement";
+import DoctorProfile from "./pages/doctor/DoctorProfile";
 
 // Admin pages
-import AdminOverview from './pages/admin/AdminOverview'
-import ManageDoctors from './pages/admin/ManageDoctors'
-import ManageUsers from './pages/admin/ManageUsers'
-import AdminDefinitions from './pages/admin/AdminDefinitions'
-import AppointmentLogs from './pages/admin/AppointmentLogs'
-import WithdrawalRequests from './pages/admin/WithdrawalRequests'
-import SystemSettings from './pages/admin/SystemSettings'
+import AdminOverview from "./pages/admin/AdminOverview";
+import ManageDoctors from "./pages/admin/ManageDoctors";
+import ManageUsers from "./pages/admin/ManageUsers";
+import AdminDefinitions from "./pages/admin/AdminDefinitions";
+import AppointmentLogs from "./pages/admin/AppointmentLogs";
+import WithdrawalRequests from "./pages/admin/WithdrawalRequests";
+import SystemSettings from "./pages/admin/SystemSettings";
 
 function OnboardingGuard() {
-  const user = useAuthStore((s) => s.user)
-  const pwaSeen = localStorage.getItem('dr-saina-pwa-seen')
-  const onboardingDone = localStorage.getItem('dr-saina-onboarding-done')
+  const user = useAuthStore((s) => s.user);
+  const pwaSeen = localStorage.getItem("AvalDr-pwa-seen");
+  const onboardingDone = localStorage.getItem("AvalDr-onboarding-done");
 
   if (user) {
     const home =
-      user.role === 'admin' ? '/admin' : user.role === 'doctor' ? '/doctor' : '/user'
-    return <Navigate to={home} replace />
+      user.role === "admin"
+        ? "/admin"
+        : user.role === "doctor"
+          ? "/doctor"
+          : "/user";
+    return <Navigate to={home} replace />;
   }
 
-  if (!pwaSeen) return <PWAInstallGuide />
-  if (!onboardingDone) return <WelcomeSlides />
-  return <Login />
+  if (!pwaSeen) return <PWAInstallGuide />;
+  if (!onboardingDone) return <WelcomeSlides />;
+  return <Login />;
 }
 
 function RootRedirect() {
-  const user = useAuthStore((s) => s.user)
-  if (!user) return <Navigate to="/login" replace />
+  const user = useAuthStore((s) => s.user);
+  if (!user) return <Navigate to="/login" replace />;
   const home =
-    user.role === 'admin' ? '/admin' : user.role === 'doctor' ? '/doctor' : '/user'
-  return <Navigate to={home} replace />
+    user.role === "admin"
+      ? "/admin"
+      : user.role === "doctor"
+        ? "/doctor"
+        : "/user";
+  return <Navigate to={home} replace />;
 }
 
 export default function App() {
@@ -75,7 +83,7 @@ export default function App() {
       <Route
         path="/user"
         element={
-          <ProtectedRoute allow={['user']}>
+          <ProtectedRoute allow={["user"]}>
             <DashboardLayout role="user" />
           </ProtectedRoute>
         }
@@ -91,7 +99,7 @@ export default function App() {
       <Route
         path="/doctor"
         element={
-          <ProtectedRoute allow={['doctor']}>
+          <ProtectedRoute allow={["doctor"]}>
             <DashboardLayout role="doctor" />
           </ProtectedRoute>
         }
@@ -107,7 +115,7 @@ export default function App() {
       <Route
         path="/admin"
         element={
-          <ProtectedRoute allow={['admin']}>
+          <ProtectedRoute allow={["admin"]}>
             <DashboardLayout role="admin" />
           </ProtectedRoute>
         }
@@ -123,5 +131,5 @@ export default function App() {
 
       <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
-  )
+  );
 }

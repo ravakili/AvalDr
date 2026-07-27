@@ -88,13 +88,13 @@ export default function PWAInstallGuide() {
   const navigate = useNavigate();
 
   const skip = () => {
-    localStorage.setItem("dr-saina-pwa-seen", "true");
+    localStorage.setItem("AvalDr-pwa-seen", "true");
     navigate("/onboarding", { replace: true });
   };
 
   const done = () => {
-    localStorage.setItem("dr-saina-pwa-installed", "true");
-    localStorage.setItem("dr-saina-pwa-seen", "true");
+    localStorage.setItem("AvalDr-pwa-installed", "true");
+    localStorage.setItem("AvalDr-pwa-seen", "true");
     navigate("/onboarding", { replace: true });
   };
 
@@ -157,17 +157,19 @@ export default function PWAInstallGuide() {
                 مرحله بعدی
               </PrimaryButton>
             ) : (
-           
               <PrimaryButton size="sm" onClick={done}>
                 نصب شد!
               </PrimaryButton>
             )}
 
             {current === 0 && (
-              <PrimaryButton className="bg-red-200 text-black" size="sm" onClick={skip}>
+              <PrimaryButton
+                className="bg-red-200 text-black"
+                size="sm"
+                onClick={skip}
+              >
                 بعداً نصب می‌کنم
               </PrimaryButton>
-            
             )}
           </div>
         </GlassCard>
