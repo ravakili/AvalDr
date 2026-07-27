@@ -19,7 +19,7 @@ export default function Topbar({ role, title, subtitle, onMenu }: Props) {
   const [open, setOpen] = useState(false);
 
   return (
-    <header className="glass sticky top-0 z-20 mb-6 flex items-center gap-4 rounded-2xl px-5 py-3.5">
+    <header className="glass sticky top-6 z-20 mb-6 flex items-center gap-4 rounded-2xl px-5 py-3.5">
       {/* <button
         className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-white/60 hidden"
         onClick={onMenu}

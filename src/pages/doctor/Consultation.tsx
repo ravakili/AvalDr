@@ -26,6 +26,8 @@ import {
 import { appointments, chatMessages as seedMessages, drugSuggestions, getPatient } from '../../data/mockData'
 import { cn, formatDateFa, toFa } from '../../lib/utils'
 import type { ChatMessage } from '../../types'
+import { MdOutlineKeyboardArrowRight } from 'react-icons/md'
+import { User } from 'lucide-react'
 
 const ME = 'doc-1'
 
@@ -152,7 +154,7 @@ export default function Consultation() {
           className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-white/60"
           aria-label="بازگشت"
         >
-          <IconSend className="rotate-180" />
+          <MdOutlineKeyboardArrowRight />
         </button>
         <Avatar src={patient.avatar} size="md" ring online />
         <div className="min-w-0 flex-1">

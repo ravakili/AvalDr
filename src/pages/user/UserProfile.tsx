@@ -15,11 +15,43 @@ import {
   IconFile,
   IconHeart,
   IconLogout,
+  IconPlus,
   IconShield,
 } from "../../components/ui/icons";
 import { roleLabel } from "../../components/layout/nav";
 
 type Section = "personal" | "medical" | "documents" | "notifications";
+
+// Editable medical-record categories. Each keeps its own state seeded from
+// the patient's mock data, and exposes a list of options to add via select.
+type CategoryKey = "diagnoses" | "allergies" | "medications";
+
+const CATEGORY_OPTIONS: Record<CategoryKey, string[]> = {
+  diagnoses: [
+    "فشار خون بالا",
+    "دیابت نوع ۲",
+    "کلسترول بالا",
+    "آسم",
+    "میگرن",
+    "کم‌خونی",
+  ],
+  allergies: [
+    "پنی‌سیلین",
+    "بادام زمینی",
+    "گلدان",
+    "گرد و غبار",
+    "آسپرین",
+    "لاکتوز",
+  ],
+  medications: [
+    "متابولیک",
+    "آتورواستاتین",
+    "متفرمین",
+    "آسپرین",
+    "امپرازول",
+    "سرترالین",
+  ],
+};
 
 export default function UserProfile() {
   const user = useAuthStore((s) => s.user);
@@ -28,6 +60,27 @@ export default function UserProfile() {
   const [prefs, setPrefs] = useState(defaultNotificationPrefs);
   const logout = useAuthStore((s) => s.logout);
 
+  // Editable medical-record categories, seeded from mock data.
+  const [diagnoses, setDiagnoses] = useState<string[]>(
+    me.medicalHistory?.diagnoses ?? [],
+  );
+  const [allergies, setAllergies] = useState<string[]>(
+    me.medicalHistory?.allergies ?? [],
+  );
+  const [medications, setMedications] = useState<string[]>(
+    me.medicalHistory?.medications ?? [],
+  );
+
+  const addEntry = (key: CategoryKey, value: string) => {
+    if (!value) return;
+    const setters = {
+      diagnoses: setDiagnoses,
+      allergies: setAllergies,
+      medications: setMedications,
+    } as const;
+    setters[key]((arr) => (arr.includes(value) ? arr : [...arr, value]));
+  };
+
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {/* Profile card */}
@@ -35,7 +88,7 @@ export default function UserProfile() {
         <div className="flex w-full items-center justify-end gap-3">
           <button
             onClick={logout}
-            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-400 transition border-red-200 border-2 hover:bg-red-50 hover:text-red-500"
+            className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-400 transition text-red-300 hover:border-red-500 border-red-300 border-2 hover:bg-red-50 hover:text-red-500"
             title="خروج"
           >
             <IconLogout />
@@ -124,59 +177,30 @@ export default function UserProfile() {
 
         {section === "medical" && (
           <div className="space-y-5">
-            <div>
-              <p className="mb-2 text-sm font-medium text-ink-700">تشخیص‌ها</p>
-              <div className="flex flex-wrap gap-2">
-                {me.medicalHistory?.diagnoses.length ? (
-                  me.medicalHistory.diagnoses.map((d) => (
-                    <Badge key={d} tone="blue">
-                      {d}
-                    </Badge>
-                  ))
-                ) : (
-                  <span className="text-xs text-ink-400">بدون سابقه</span>
-                )}
-                <button className="rounded-full border border-dashed border-primary-300 px-2.5 py-0.5 text-xs text-primary-600 hover:bg-primary-50">
-                  + افزودن
-                </button>
-              </div>
-            </div>
-            <div>
-              <p className="mb-2 text-sm font-medium text-ink-700">حساسیت‌ها</p>
-              <div className="flex flex-wrap gap-2">
-                {me.medicalHistory?.allergies.length ? (
-                  me.medicalHistory.allergies.map((d) => (
-                    <Badge key={d} tone="red">
-                      {d}
-                    </Badge>
-                  ))
-                ) : (
-                  <span className="text-xs text-ink-400">بدون حساسیت</span>
-                )}
-                <button className="rounded-full border border-dashed border-primary-300 px-2.5 py-0.5 text-xs text-primary-600 hover:bg-primary-50">
-                  + افزودن
-                </button>
-              </div>
-            </div>
-            <div>
-              <p className="mb-2 text-sm font-medium text-ink-700">
-                داروهای مصرفی
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {me.medicalHistory?.medications.length ? (
-                  me.medicalHistory.medications.map((d) => (
-                    <Badge key={d} tone="teal">
-                      {d}
-                    </Badge>
-                  ))
-                ) : (
-                  <span className="text-xs text-ink-400">بدون داروی فعلی</span>
-                )}
-                <button className="rounded-full border border-dashed border-primary-300 px-2.5 py-0.5 text-xs text-primary-600 hover:bg-primary-50">
-                  + افزودن
-                </button>
-              </div>
-            </div>
+            <MedicalCategory
+              label="تشخیص‌ها"
+              emptyText="بدون سابقه"
+              tone="blue"
+              items={diagnoses}
+              options={CATEGORY_OPTIONS.diagnoses}
+              onAdd={(v) => addEntry("diagnoses", v)}
+            />
+            <MedicalCategory
+              label="حساسیت‌ها"
+              emptyText="بدون حساسیت"
+              tone="red"
+              items={allergies}
+              options={CATEGORY_OPTIONS.allergies}
+              onAdd={(v) => addEntry("allergies", v)}
+            />
+            <MedicalCategory
+              label="داروهای مصرفی"
+              emptyText="بدون داروی فعلی"
+              tone="teal"
+              items={medications}
+              options={CATEGORY_OPTIONS.medications}
+              onAdd={(v) => addEntry("medications", v)}
+            />
             <div>
               <label className="mb-1.5 block text-sm font-medium text-ink-700">
                 یادداشت پزشکی
@@ -277,6 +301,81 @@ function Mini({
       </div>
       <p className="text-sm font-bold text-ink-800 tabular">{value}</p>
       <p className="text-[10px] text-ink-400">{label}</p>
+    </div>
+  );
+}
+
+type BadgeTone = "blue" | "red" | "teal";
+
+/** A medical-record category: existing items as badges plus a select + add
+ *  button row to append a new entry from a preset list. */
+function MedicalCategory({
+  label,
+  emptyText,
+  tone,
+  items,
+  options,
+  onAdd,
+}: {
+  label: string;
+  emptyText: string;
+  tone: BadgeTone;
+  items: string[];
+  options: string[];
+  onAdd: (value: string) => void;
+}) {
+  const [pending, setPending] = useState("");
+
+  // Options not yet added (avoid duplicates / already-selected items).
+  const available = options.filter((o) => !items.includes(o));
+
+  const handleAdd = () => {
+    if (!pending) return;
+    onAdd(pending);
+    setPending("");
+  };
+
+  return (
+    <div>
+      <p className="mb-2 text-sm font-medium text-ink-700">{label}</p>
+      <div className="flex flex-wrap gap-2">
+        {items.length ? (
+          items.map((d) => (
+            <Badge key={d} tone={tone}>
+              {d}
+            </Badge>
+          ))
+        ) : (
+          <span className="text-xs text-ink-400">{emptyText}</span>
+        )}
+      </div>
+
+      {/* Select + add button */}
+      <div className="mt-2 flex items-center gap-2">
+        <select
+          value={pending}
+          onChange={(e) => setPending(e.target.value)}
+          disabled={available.length === 0}
+          className="glass-input rounded-xl px-3 py-1.5 text-sm text-ink-800 shadow-sm outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-200 disabled:opacity-50"
+        >
+          <option value="">
+            {available.length === 0 ? "همه موارد افزوده شد" : "انتخاب کنید…"}
+          </option>
+          {available.map((o) => (
+            <option key={o} value={o}>
+              {o}
+            </option>
+          ))}
+        </select>
+        <PrimaryButton
+          size="sm"
+          icon={<IconPlus className="h-4 w-4" />}
+          onClick={handleAdd}
+          disabled={!pending}
+        >
+          افزودن
+        </PrimaryButton>
+      </div>
     </div>
   );
 }

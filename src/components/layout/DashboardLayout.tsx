@@ -49,7 +49,7 @@ const titles: Record<string, { title: string; subtitle?: string }> = {
     subtitle: "تأیید، تعلیق و مدیریت پزشکان",
   },
   "/admin/users": { title: "مدیریت کاربران", subtitle: "حساب‌های بیماران" },
-  "/admin/specialties": { title: "تخصص‌ها", subtitle: "مدیریت حوزه‌های تخصصی" },
+  "/admin/definitions": { title: "تعاریف سیستم", subtitle: "مدیریت تخصص‌ها، تشخیص‌ها، داروها و ..." },
   "/admin/logs": { title: "لاگ نوبت‌ها", subtitle: "سوابق و گزارش فعالیت‌ها" },
   "/admin/withdrawals": { title: "درخواست‌های برداشت", subtitle: "مدیریت تسویه پزشکان" },
   "/admin/settings": { title: "تنظیمات سیستم", subtitle: "پیکربندی پلتفرم" },
@@ -74,7 +74,7 @@ export default function DashboardLayout({ role }: Props) {
   return (
     <div className="flex min-h-screen gap-5 p-4 lg:p-6">
       {/* Sidebar (desktop) */}
-      <div className="sticky top-4 hidden h-[calc(100vh-2rem)] shrink-0 lg:block">
+      <div className="sticky top-6 hidden h-[calc(100vh-3rem)] shrink-0 lg:block">
         <Sidebar role={role} />
       </div>
 
@@ -99,7 +99,7 @@ export default function DashboardLayout({ role }: Props) {
           subtitle={meta.subtitle}
           onMenu={() => setMobileOpen(true)}
         />
-        <div className="flex-1 animate-fade-in pb-24 lg:pb-0">
+        <div className="flex-1 animate-fade-in pb-20 lg:pb-0 ">
           <Outlet />
         </div>
       </main>

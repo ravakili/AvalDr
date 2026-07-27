@@ -1,4 +1,5 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import GlassCard from '../../components/ui/GlassCard'
 import Avatar from '../../components/ui/Avatar'
 import PrimaryButton from '../../components/ui/PrimaryButton'
@@ -15,9 +16,8 @@ import {
   IconSearch,
   IconShield,
   IconStethoscope,
-  IconTrash,
 } from '../../components/ui/icons'
-import { doctors as seed, getSpecialty, specialties } from '../../data/mockData'
+import { doctors as seed, getSpecialty, patients, specialties } from '../../data/mockData'
 import { cn, toFa } from '../../lib/utils'
 import type { Doctor } from '../../types'
 
@@ -33,9 +33,31 @@ export default function ManageDoctors() {
   const [list, setList] = useState<Doctor[]>(seed)
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<DocStatus | 'all'>('all')
+  const [searchParams] = useSearchParams()
   const [addOpen, setAddOpen] = useState(false)
-  const [confirmId, setConfirmId] = useState<string | null>(null)
   const [verifyId, setVerifyId] = useState<string | null>(null)
+
+  // Add-doctor form
+  const [step, setStep] = useState<'select' | 'documents'>('select')
+  const [selectedUser, setSelectedUser] = useState<string | null>(null)
+  const [specId, setSpecId] = useState('sp-gp')
+  const [city, setCity] = useState('')
+  const [hospital, setHospital] = useState('')
+  const [years, setYears] = useState('')
+  const [fee, setFee] = useState('')
+  const [docs, setDocs] = useState({
+    certificate: false,
+    license: false,
+    nationalId: false,
+    photo: false,
+  })
+
+  useEffect(() => {
+    const tab = searchParams.get('tab')
+    if (tab === 'pending' || tab === 'approved' || tab === 'suspended') {
+      setStatus(tab)
+    }
+  }, [])
 
   const verifyDoc = verifyId ? list.find((d) => d.id === verifyId) : null
 
@@ -47,12 +69,49 @@ export default function ManageDoctors() {
     [list, q, status],
   )
 
+  const availableUsers = useMemo(
+    () => patients.filter((p) => !list.some((d) => d.name === p.name)).slice(0, 10),
+    [list],
+  )
+
   const setStatusOf = (id: string, s: DocStatus) =>
     setList((arr) => arr.map((d) => (d.id === id ? { ...d, status: s } : d)))
 
-  const remove = (id: string) => {
-    setList((arr) => arr.filter((d) => d.id !== id))
-    setConfirmId(null)
+  const resetAdd = () => {
+    setStep('select')
+    setSelectedUser(null)
+    setSpecId('sp-gp')
+    setCity('')
+    setHospital('')
+    setYears('')
+    setFee('')
+    setDocs({ certificate: false, license: false, nationalId: false, photo: false })
+  }
+
+  const handleAdd = () => {
+    if (!selectedUser) return
+    const user = patients.find((p) => p.id === selectedUser)
+    if (!user) return
+    const allDocs = Object.values(docs).every(Boolean)
+    const newDoc: Doctor = {
+      id: `doc-${Date.now()}`,
+      name: user.name,
+      avatar: user.avatar,
+      phone: user.phone,
+      specialtyId: specId,
+      city: city || user.city,
+      hospital: hospital || '—',
+      experienceYears: Number(years) || 0,
+      rating: 0,
+      reviewsCount: 0,
+      fee: Number(fee) || 0,
+      status: allDocs ? 'pending' : 'pending',
+      bio: '',
+      workingHours: [],
+    }
+    setList((arr) => [...arr, newDoc])
+    setAddOpen(false)
+    resetAdd()
   }
 
   return (
@@ -92,7 +151,7 @@ export default function ManageDoctors() {
             ))}
           </div>
         </div>
-        <PrimaryButton icon={<IconPlus />} onClick={() => setAddOpen(true)}>
+        <PrimaryButton icon={<IconPlus />} onClick={() => { resetAdd(); setAddOpen(true) }}>
           افزودن پزشک
         </PrimaryButton>
       </GlassCard>
@@ -174,13 +233,6 @@ export default function ManageDoctors() {
                           <IconAction title="ویرایش">
                             <IconEdit className="h-4 w-4" />
                           </IconAction>
-                          <IconAction
-                            title="حذف"
-                            tone="red"
-                            onClick={() => setConfirmId(d.id)}
-                          >
-                            <IconTrash className="h-4 w-4" />
-                          </IconAction>
                         </div>
                       </td>
                     </tr>
@@ -208,73 +260,142 @@ export default function ManageDoctors() {
         />
       )}
 
-      {/* Add doctor */}
+      {/* Add doctor modal */}
       <Modal
         open={addOpen}
         onClose={() => setAddOpen(false)}
-        title="افزودن پزشک جدید"
+        title="افزودن پزشک"
         size="lg"
         footer={
           <>
-            <PrimaryButton
-              icon={<IconCheck />}
-              onClick={() => {
-                setAddOpen(false)
-              }}
-            >
-              ثبت پزشک
-            </PrimaryButton>
-            <PrimaryButton variant="ghost" onClick={() => setAddOpen(false)}>
-              انصراف
-            </PrimaryButton>
+            {step === 'select' ? (
+              <>
+                <PrimaryButton
+                  icon={<IconCheck />}
+                  disabled={!selectedUser}
+                  onClick={() => setStep('documents')}
+                >
+                  ادامه
+                </PrimaryButton>
+                <PrimaryButton variant="ghost" onClick={() => setAddOpen(false)}>
+                  انصراف
+                </PrimaryButton>
+              </>
+            ) : (
+              <>
+                <PrimaryButton
+                  icon={<IconCheck />}
+                  disabled={!selectedUser}
+                  onClick={handleAdd}
+                >
+                  ثبت پزشک
+                </PrimaryButton>
+                <PrimaryButton variant="ghost" onClick={() => setStep('select')}>
+                  مرحله قبل
+                </PrimaryButton>
+              </>
+            )}
           </>
         }
       >
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <InputField label="نام و نام خانوادگی" name="dname" placeholder="دکتر …" />
-          <InputField label="شماره موبایل" dir="ltr" className="text-right" name="dphone" placeholder="0912…" />
-          <SelectField label="تخصص" name="dspec">
-            {specialties.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.icon} {s.name}
-              </option>
-            ))}
-          </SelectField>
-          <InputField label="شهر" name="dcity" />
-          <InputField label="بیمارستان / مطب" name="dhospital" />
-          <InputField
-            label="تعرفه ویزیت (تومان)"
-            dir="ltr"
-            className="text-right"
-            name="dfee"
-            placeholder="200000"
-          />
-        </div>
-        <p className="mt-4 rounded-xl bg-primary-50/60 p-3 text-xs text-primary-700">
-          پس از ثبت، پزشک در وضعیت «در انتظار تأیید» قرار می‌گیرد.
-        </p>
-      </Modal>
-
-      {/* Delete confirm */}
-      <Modal
-        open={!!confirmId}
-        onClose={() => setConfirmId(null)}
-        title="حذف پزشک"
-        size="sm"
-        footer={
-          <>
-            <PrimaryButton variant="danger" icon={<IconTrash />} onClick={() => remove(confirmId!)}>
-              بله، حذف شود
-            </PrimaryButton>
-            <PrimaryButton variant="ghost" onClick={() => setConfirmId(null)}>
-              انصراف
-            </PrimaryButton>
-          </>
-        }
-      >
-        <p className="text-sm leading-7 text-ink-600">
-          آیا از حذف این پزشک مطمئن هستید؟ این عملیات قابل بازگشت نیست.
-        </p>
+        {step === 'select' ? (
+          <div className="space-y-4">
+            <p className="text-sm text-ink-500">کاربر مورد نظر را برای ثبت به عنوان پزشک انتخاب کنید:</p>
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              {availableUsers.map((u) => (
+                <button
+                  key={u.id}
+                  onClick={() => setSelectedUser(u.id)}
+                  className={cn(
+                    'flex items-center gap-3 rounded-xl border p-3 text-right transition',
+                    selectedUser === u.id
+                      ? 'border-primary-400 bg-primary-50/60'
+                      : 'border-white/60 bg-white/40 hover:bg-white/60',
+                  )}
+                >
+                  <Avatar src={u.avatar} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate font-semibold text-ink-800">{u.name}</p>
+                    <p className="truncate text-xs text-ink-400" dir="ltr">{u.phone}</p>
+                  </div>
+                  {selectedUser === u.id && (
+                    <IconCheck className="h-5 w-5 shrink-0 text-primary-500" />
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            {(() => {
+              const u = selectedUser ? patients.find((p) => p.id === selectedUser) : undefined
+              if (!u) return null
+              return (
+              <div className="flex items-center gap-3 rounded-xl bg-primary-50/60 p-3">
+                <Avatar src={u.avatar || ''} size="sm" />
+                <div>
+                  <p className="font-semibold text-ink-800">{u.name}</p>
+                  <p className="text-xs text-ink-400">{u.phone}</p>
+                </div>
+              </div>
+              )
+            })()}
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <SelectField label="تخصص" name="dspec" value={specId} onChange={(e) => setSpecId(e.target.value)}>
+                {specialties.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {s.icon} {s.name}
+                  </option>
+                ))}
+              </SelectField>
+              <InputField label="شهر" name="dcity" value={city} onChange={(e) => setCity(e.target.value)} />
+              <InputField label="بیمارستان / مطب" name="dhospital" value={hospital} onChange={(e) => setHospital(e.target.value)} />
+              <InputField label="سابقه کار (سال)" name="dyears" type="number" value={years} onChange={(e) => setYears(e.target.value)} />
+              <InputField
+                label="تعرفه ویزیت (تومان)"
+                dir="ltr"
+                className="text-right"
+                name="dfee"
+                value={fee}
+                onChange={(e) => setFee(e.target.value)}
+                placeholder="200000"
+              />
+            </div>
+            <div>
+              <p className="mb-2 text-sm font-medium text-ink-700">بارگذاری مدارک (الزامی)</p>
+              <div className="space-y-2">
+                {[
+                  { key: 'certificate', label: 'مدرک تخصص' },
+                  { key: 'license', label: 'کارت نظام پزشکی' },
+                  { key: 'nationalId', label: 'شناسنامه / کارت ملی' },
+                  { key: 'photo', label: 'عکس پرسنلی' },
+                ].map(({ key, label }) => (
+                  <label
+                    key={key}
+                    className="flex cursor-pointer items-center gap-3 rounded-xl border border-white/60 bg-white/40 px-4 py-3 transition hover:bg-white/60"
+                  >
+                    <input
+                      type="checkbox"
+                      checked={(docs as any)[key]}
+                      onChange={() => setDocs((d) => ({ ...d, [key]: !(d as any)[key] }))}
+                      className="h-4 w-4 accent-primary-500"
+                    />
+                    <IconFile className="h-5 w-5 shrink-0 text-primary-500" />
+                    <span className="text-sm text-ink-700">{label}</span>
+                    {(docs as any)[key] && (
+                      <span className="mr-auto rounded bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-600">
+                        بارگذاری شد
+                      </span>
+                    )}
+                  </label>
+                ))}
+              </div>
+            </div>
+            <p className="rounded-xl bg-primary-50/60 p-3 text-xs text-primary-700">
+              پس از ثبت، پزشک در وضعیت «در انتظار تأیید» قرار می‌گیرد.
+            </p>
+          </div>
+        )}
       </Modal>
 
       {/* Verification detail modal */}

@@ -188,17 +188,24 @@ export default function DoctorOverview() {
           </div>
         </GlassCard>
 
-        {/* Pending requests + reminders */}
+        {/* New visits (sorted by createdAt, newest first) */}
         <div className="space-y-6">
           <GlassCard className="p-6">
             <div className="mb-4 flex items-center justify-between">
-              <h3 className="font-bold text-ink-800">درخواست‌های جدید</h3>
-              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-700">
-                {toFa(pending.length)} مورد
+              <h3 className="font-bold text-ink-800">ویزیت‌های جدید</h3>
+              <span className="rounded-full bg-primary-100 px-2 py-0.5 text-xs font-semibold text-primary-700">
+                {toFa(mine.length)} ویزیت
               </span>
             </div>
             <div className="space-y-3">
-              {pending.map((a) => {
+              {[...mine]
+                .sort((a, b) => {
+                  const ta = a.createdAt || a.date
+                  const tb = b.createdAt || b.date
+                  return ta < tb ? 1 : -1
+                })
+                .slice(0, 6)
+                .map((a) => {
                 const pat = getPatient(a.patientId)!
                 return (
                   <div
@@ -210,23 +217,16 @@ export default function DoctorOverview() {
                       <div className="min-w-0 flex-1">
                         <p className="truncate text-sm font-semibold text-ink-800">{pat.name}</p>
                         <p className="text-[11px] text-ink-400">
-                          {formatDateFa(a.date)} • {toFa(a.time)}
+                          {formatDateFa(a.date)} • {toFa(a.time)} • {a.reason}
                         </p>
                       </div>
-                    </div>
-                    <div className="mt-3 flex gap-2">
-                      <PrimaryButton size="sm" className="flex-1">
-                        پذیرش
-                      </PrimaryButton>
-                      <PrimaryButton size="sm" variant="ghost" className="flex-1">
-                        رد
-                      </PrimaryButton>
+                      <StatusBadge status={a.status} />
                     </div>
                   </div>
                 )
               })}
-              {pending.length === 0 && (
-                <p className="py-6 text-center text-sm text-ink-400">درخواستی وجود ندارد.</p>
+              {mine.length === 0 && (
+                <p className="py-6 text-center text-sm text-ink-400">ویزیتی ثبت نشده است.</p>
               )}
             </div>
           </GlassCard>

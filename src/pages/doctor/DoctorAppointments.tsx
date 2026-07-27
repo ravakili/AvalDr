@@ -2,8 +2,10 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import GlassCard from '../../components/ui/GlassCard'
 import Avatar from '../../components/ui/Avatar'
+import Badge from '../../components/ui/Badge'
 import PrimaryButton from '../../components/ui/PrimaryButton'
 import { StatusBadge } from '../../components/ui/Badge'
+import Modal from '../../components/ui/Modal'
 import { SelectField } from '../../components/ui/InputField'
 import EmptyState from '../../components/ui/EmptyState'
 import { cn, formatDateFa, toFa } from '../../lib/utils'
@@ -13,9 +15,10 @@ import {
   IconChevron,
   IconChevronDown,
   IconClock,
+  IconFile,
   IconList,
 } from '../../components/ui/icons'
-import { appointments, getPatient } from '../../data/mockData'
+import { appointments, getPatient, prescriptions } from '../../data/mockData'
 import type { AppointmentStatus } from '../../types'
 
 const ME = 'doc-1'
@@ -33,6 +36,8 @@ export default function DoctorAppointments() {
   const [status, setStatus] = useState<AppointmentStatus | 'all'>('all')
   const [view, setView] = useState<'list' | 'calendar'>('list')
   const [expanded, setExpanded] = useState<string | null>(null)
+  const [profilePatient, setProfilePatient] = useState<string | null>(null)
+  const [rxPatient, setRxPatient] = useState<string | null>(null)
 
   const mine = appointments
     .filter((a) => a.doctorId === ME)
@@ -176,14 +181,14 @@ export default function DoctorAppointments() {
                           </PrimaryButton>
                         )}
                         {a.status === 'completed' && (
-                          <PrimaryButton size="sm" variant="subtle">
+                          <PrimaryButton size="sm" variant="subtle" onClick={() => setRxPatient(a.patientId)}>
                             مشاهده نسخه
                           </PrimaryButton>
                         )}
                         <PrimaryButton
                           size="sm"
                           variant="ghost"
-                          onClick={() => navigate('/doctor/patients')}
+                          onClick={() => setProfilePatient(a.patientId)}
                         >
                           پرونده بیمار
                         </PrimaryButton>
@@ -241,6 +246,110 @@ export default function DoctorAppointments() {
           description="فیلتر را تغییر دهید."
         />
       )}
+
+      {/* Patient profile modal */}
+      <Modal
+        open={!!profilePatient}
+        onClose={() => setProfilePatient(null)}
+        title="پرونده بیمار"
+        size="lg"
+        footer={<PrimaryButton variant="ghost" onClick={() => setProfilePatient(null)}>بستن</PrimaryButton>}
+      >
+        {profilePatient && (() => {
+          const pat = getPatient(profilePatient)
+          if (!pat) return <p className="text-sm text-ink-500">اطلاعاتی یافت نشد.</p>
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <Avatar src={pat.avatar} size="lg" ring />
+                <div>
+                  <p className="text-lg font-bold text-ink-800">{pat.name}</p>
+                  <p className="text-sm text-ink-400" dir="ltr">{pat.phone}</p>
+                  <p className="text-xs text-ink-400">{pat.city} • {pat.gender === 'male' ? 'آقا' : 'خانم'} • {toFa(pat.age)} سال</p>
+                </div>
+              </div>
+              {pat.medicalHistory && (
+                <>
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    <ProfileField label="تشخیص‌ها" value={pat.medicalHistory.diagnoses?.join('، ') || '—'} />
+                    <ProfileField label="حساسیت‌ها" value={pat.medicalHistory.allergies?.join('، ') || '—'} />
+                    <ProfileField label="داروها" value={pat.medicalHistory.medications?.join('، ') || '—'} />
+                  </div>
+                  {pat.medicalHistory.documents && pat.medicalHistory.documents.length > 0 && (
+                    <div>
+                      <p className="mb-2 text-sm font-medium text-ink-700">مدارک</p>
+                      <div className="flex flex-wrap gap-2">
+                        {pat.medicalHistory.documents.map((doc) => (
+                          <span key={doc.id} className="inline-flex items-center gap-1.5 rounded-lg bg-white/60 px-3 py-1.5 text-xs text-ink-600">
+                            <IconFile className="h-3.5 w-3.5" /> {doc.name} ({doc.type})
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )
+        })()}
+      </Modal>
+
+      {/* Prescription modal */}
+      <Modal
+        open={!!rxPatient}
+        onClose={() => setRxPatient(null)}
+        title="نسخه بیمار"
+        size="lg"
+        footer={<PrimaryButton variant="ghost" onClick={() => setRxPatient(null)}>بستن</PrimaryButton>}
+      >
+        {rxPatient && (() => {
+          const pat = getPatient(rxPatient)
+          const rxs = prescriptions.filter((p) => p.patientId === rxPatient)
+          if (!pat) return <p className="text-sm text-ink-500">اطلاعاتی یافت نشد.</p>
+          return (
+            <div className="space-y-4">
+              <div className="flex items-center gap-3">
+                <Avatar src={pat.avatar} size="md" />
+                <p className="font-bold text-ink-800">{pat.name}</p>
+              </div>
+              {rxs.length === 0 ? (
+                <p className="text-sm text-ink-400">نسخه‌ای برای این بیمار صادر نشده است.</p>
+              ) : (
+                rxs.map((rx) => (
+                  <div key={rx.id} className="rounded-xl border border-white/60 bg-white/50 p-4">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-xs text-ink-400">تاریخ: {formatDateFa(rx.createdAt)}</span>
+                      <Badge tone="teal">{rx.id}</Badge>
+                    </div>
+                    <div className="space-y-2">
+                      {rx.items.map((item, i) => (
+                        <div key={i} className="flex items-center justify-between rounded-lg bg-white/60 px-3 py-2">
+                          <span className="text-sm font-medium text-ink-700">💊 {item.drug}</span>
+                          <span className="text-xs text-ink-500">{item.usage}</span>
+                        </div>
+                      ))}
+                    </div>
+                    {rx.notes && (
+                      <p className="mt-2 rounded-lg bg-white/40 px-3 py-2 text-xs text-ink-500">
+                        📝 {rx.notes}
+                      </p>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          )
+        })()}
+      </Modal>
+    </div>
+  )
+}
+
+function ProfileField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/50 bg-white/40 p-3">
+      <p className="text-[11px] text-ink-400">{label}</p>
+      <p className="text-sm font-semibold text-ink-800">{value}</p>
     </div>
   )
 }

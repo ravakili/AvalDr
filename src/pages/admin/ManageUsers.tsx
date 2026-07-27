@@ -6,16 +6,21 @@ import PrimaryButton from '../../components/ui/PrimaryButton'
 import InputField from '../../components/ui/InputField'
 import EmptyState from '../../components/ui/EmptyState'
 import Modal from '../../components/ui/Modal'
-import { IconDownload, IconSearch, IconTrash, IconUsers } from '../../components/ui/icons'
+import {
+  IconDownload,
+  IconSearch,
+  IconUsers,
+} from '../../components/ui/icons'
 import { cn, toFa } from '../../lib/utils'
 import { patients } from '../../data/mockData'
+import type { Patient } from '../../types'
 
 export default function ManageUsers() {
   const [q, setQ] = useState('')
-  const [list, setList] = useState(patients)
+  const [list, setList] = useState(patients.map((p) => ({ ...p, suspended: false })))
   const [selected, setSelected] = useState<string[]>([])
-  const [confirmId, setConfirmId] = useState<string | null>(null)
   const [bulkOpen, setBulkOpen] = useState(false)
+  const [profileUser, setProfileUser] = useState<(Patient & { suspended?: boolean }) | null>(null)
 
   const filtered = useMemo(
     () => list.filter((p) => (q ? p.name.includes(q) || p.phone.includes(q) || (p.email || '').includes(q) : true)),
@@ -26,6 +31,16 @@ export default function ManageUsers() {
     setSelected((arr) => (arr.includes(id) ? arr.filter((x) => x !== id) : [...arr, id]))
   const toggleAll = () =>
     setSelected(selected.length === filtered.length ? [] : filtered.map((p) => p.id))
+
+  const toggleSuspend = (id: string) => {
+    setList((arr) => arr.map((p) => (p.id === id ? { ...p, suspended: !p.suspended } : p)))
+  }
+
+  const bulkSuspend = () => {
+    setList((arr) => arr.map((p) => (selected.includes(p.id) ? { ...p, suspended: true } : p)))
+    setBulkOpen(false)
+    setSelected([])
+  }
 
   const exportCsv = () => {
     const rows = [
@@ -40,12 +55,6 @@ export default function ManageUsers() {
     a.download = 'users.csv'
     a.click()
     URL.revokeObjectURL(url)
-  }
-
-  const bulkSuspend = () => {
-    // Mock: would set status; here we just close modal
-    setBulkOpen(false)
-    setSelected([])
   }
 
   return (
@@ -66,7 +75,7 @@ export default function ManageUsers() {
         <div className="flex gap-2">
           {selected.length > 0 && (
             <PrimaryButton variant="danger" size="sm" onClick={() => setBulkOpen(true)}>
-              اقدام گروهی ({toFa(selected.length)})
+              تعلیق گروهی ({toFa(selected.length)})
             </PrimaryButton>
           )}
           <PrimaryButton variant="ghost" size="sm" icon={<IconDownload className="h-4 w-4" />} onClick={exportCsv}>
@@ -123,21 +132,23 @@ export default function ManageUsers() {
                       <td className="px-4 py-3 text-ink-500">{p.city}</td>
                       <td className="px-4 py-3 tabular text-ink-600">{toFa(p.age)}</td>
                       <td className="px-4 py-3">
-                        <Badge tone="green" dot>فعال</Badge>
+                        <Badge tone={p.suspended ? 'red' : 'green'} dot>
+                          {p.suspended ? 'معلق' : 'فعال'}
+                        </Badge>
                       </td>
                       <td className="px-4 py-3">
                         <div className="flex items-center justify-end gap-1">
-                          <button className="rounded-lg px-2.5 py-1 text-xs font-medium text-primary-600 transition hover:bg-primary-50">
+                          <button
+                            onClick={() => setProfileUser(p)}
+                            className="rounded-lg px-2.5 py-1 text-xs font-medium text-primary-600 transition hover:bg-primary-50"
+                          >
                             پروفایل
                           </button>
-                          <button className="rounded-lg px-2.5 py-1 text-xs font-medium text-amber-600 transition hover:bg-amber-50">
-                            تعلیق
-                          </button>
                           <button
-                            onClick={() => setConfirmId(p.id)}
-                            className="grid h-7 w-7 place-items-center rounded-lg text-red-500 transition hover:bg-red-50"
+                            onClick={() => toggleSuspend(p.id)}
+                            className="rounded-lg px-2.5 py-1 text-xs font-medium text-amber-600 transition hover:bg-amber-50"
                           >
-                            <IconTrash className="h-3.5 w-3.5" />
+                            {p.suspended ? 'رفع تعلیق' : 'تعلیق'}
                           </button>
                         </div>
                       </td>
@@ -164,32 +175,62 @@ export default function ManageUsers() {
         />
       )}
 
-      {/* Delete confirm */}
+      {/* Profile modal */}
       <Modal
-        open={!!confirmId}
-        onClose={() => setConfirmId(null)}
-        title="حذف کاربر"
-        size="sm"
+        open={!!profileUser}
+        onClose={() => setProfileUser(null)}
+        title="مشخصات کاربر"
+        size="lg"
         footer={
-          <>
-            <PrimaryButton variant="danger" icon={<IconTrash />} onClick={() => {
-              setList((arr) => arr.filter((x) => x.id !== confirmId))
-              setConfirmId(null)
-            }}>
-              بله، حذف شود
-            </PrimaryButton>
-            <PrimaryButton variant="ghost" onClick={() => setConfirmId(null)}>انصراف</PrimaryButton>
-          </>
+          <PrimaryButton variant="ghost" onClick={() => setProfileUser(null)}>
+            بستن
+          </PrimaryButton>
         }
       >
-        <p className="text-sm leading-7 text-ink-600">آیا از حذف این کاربر مطمئن هستید؟</p>
+        {profileUser && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-4">
+              <Avatar src={profileUser.avatar} size="lg" ring />
+              <div>
+                <p className="text-lg font-bold text-ink-800">{profileUser.name}</p>
+                <p className="text-sm text-ink-400" dir="ltr">{profileUser.phone}</p>
+                <Badge tone={profileUser.suspended ? 'red' : 'green'}>{profileUser.suspended ? 'معلق' : 'فعال'}</Badge>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <ProfileInfo label="کد ملی" value={toFa(profileUser.nationalId)} />
+              <ProfileInfo label="سن" value={toFa(profileUser.age)} />
+              <ProfileInfo label="شهر" value={profileUser.city} />
+              <ProfileInfo label="ایمیل" value={profileUser.email || '—'} />
+              {profileUser.medicalHistory && (
+                <>
+                  <ProfileInfo label="تشخیص‌ها" value={profileUser.medicalHistory.diagnoses?.join('، ') || '—'} />
+                  <ProfileInfo label="حساسیت‌ها" value={profileUser.medicalHistory.allergies?.join('، ') || '—'} />
+                  <ProfileInfo label="داروهای مصرفی" value={profileUser.medicalHistory.medications?.join('، ') || '—'} />
+                </>
+              )}
+            </div>
+            {profileUser.medicalHistory?.documents && profileUser.medicalHistory.documents.length > 0 && (
+              <div>
+                <p className="mb-2 text-sm font-medium text-ink-700">مدارک</p>
+                <div className="flex flex-wrap gap-2">
+                  {profileUser.medicalHistory.documents.map((doc) => (
+                    <span key={doc.id} className="rounded-lg border border-white/60 bg-white/50 px-3 py-1.5 text-xs text-ink-600">
+                      {doc.name} ({doc.type})
+                    </span>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
       </Modal>
 
       {/* Bulk action modal */}
       <Modal
         open={bulkOpen}
         onClose={() => setBulkOpen(false)}
-        title="اقدام گروهی"
+        title="تعلیق گروهی"
         size="sm"
         footer={
           <>
@@ -199,9 +240,18 @@ export default function ManageUsers() {
         }
       >
         <p className="text-sm leading-7 text-ink-600">
-          روی {toFa(selected.length)} کاربر انتخاب‌شده اقدام می‌شود. این عملیات قابل بازگشت است.
+          روی {toFa(selected.length)} کاربر انتخاب‌شده عملیات تعلیق انجام می‌شود.
         </p>
       </Modal>
+    </div>
+  )
+}
+
+function ProfileInfo({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-white/50 bg-white/40 p-3">
+      <p className="text-[11px] text-ink-400">{label}</p>
+      <p className="text-sm font-semibold text-ink-800">{value}</p>
     </div>
   )
 }

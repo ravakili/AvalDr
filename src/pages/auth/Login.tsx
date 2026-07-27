@@ -27,30 +27,39 @@ export default function Login() {
   }, [user, navigate]);
 
   const raw = toEnglishDigits(input);
-  const isValid = /^09\d{9}$/.test(raw);
+  // Accept both formats: with leading 0 (0912...) or without (912...)
+  const isValid = /^0?9\d{9}$/.test(raw);
 
   const handleChange = (val: string) => {
     const digits = val.replace(/[^0-9۰-۹]/g, "");
-    setInput(digits.slice(0, 11));
+    // Remove leading zero if present (store without zero)
+    const cleaned = digits.replace(/^0+/, "");
+    setInput(cleaned.slice(0, 10)); // Max 10 digits (without leading zero)
     setError("");
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!isValid) {
-      setError("شماره موبایل معتبر وارد کنید (مثال: 09123456789)");
+    // Ensure we have a valid 10-digit number (without zero)
+    const cleanNumber = raw.replace(/^0+/, "");
+    if (!/^9\d{9}$/.test(cleanNumber)) {
+      setError(
+        "شماره موبایل معتبر وارد کنید (مثال: 09123456789 یا 9123456789)",
+      );
       return;
     }
-    setPhone(raw);
-    await sendOTP(raw);
+    // Add leading zero for storage/API
+    const fullNumber = "0" + cleanNumber;
+    setPhone(fullNumber);
+    await sendOTP(fullNumber);
     navigate("/verify-otp", { replace: true });
   };
 
   const formatDisplay = (v: string) => {
     const e = toEnglishDigits(v);
-    if (e.length <= 4) return e;
-    if (e.length <= 7) return `${e.slice(0, 4)} ${e.slice(4)}`;
-    return `${e.slice(0, 4)} ${e.slice(4, 7)} ${e.slice(7, 11)}`;
+    if (e.length <= 3) return e;
+    if (e.length <= 6) return `${e.slice(0, 3)} ${e.slice(3)}`;
+    return `${e.slice(0, 3)} ${e.slice(3, 6)} ${e.slice(6, 10)}`;
   };
 
   return (
@@ -78,11 +87,11 @@ export default function Login() {
             {/* Phone input */}
             <div>
               <label className="mb-2 block text-sm font-medium text-ink-700">
-                شماره موبایل
+                شماره موبایل 09121110001 .... 09330001111 .... 09123456788
               </label>
               <div className="relative">
                 <span className="absolute left-3 top-3.5 z-10 text-md font-medium text-ink-500">
-                  98+
+                  {toFa("98+")}
                 </span>
                 <input
                   type="tel"
@@ -147,7 +156,8 @@ export default function Login() {
         {phone && (
           <button
             onClick={() => {
-              setInput(phone);
+              // Remove leading zero when showing in input
+              setInput(phone.replace(/^0/, ""));
               setShowTerms(true);
             }}
             className="glass-soft mt-4 w-full rounded-2xl px-4 py-2.5 text-center text-sm text-ink-500 transition hover:bg-white/60"

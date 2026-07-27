@@ -34,6 +34,7 @@ import {
   revenueData,
   userGrowthData,
 } from '../../data/mockData'
+import { useNavigate } from 'react-router-dom'
 import { formatDateFa, toFa } from '../../lib/utils'
 
 const todayIso = new Date().toISOString().slice(0, 10)
@@ -58,6 +59,7 @@ const tooltipStyle = {
 }
 
 export default function AdminOverview() {
+  const navigate = useNavigate()
   const approvedDocs = doctors.filter((d) => d.status === 'approved').length
   const pendingDocs = doctors.filter((d) => d.status === 'pending')
   const todayAppts = appointments.filter((a) => a.date === todayIso)
@@ -251,7 +253,7 @@ export default function AdminOverview() {
               <p className="text-xs text-ink-400">برای بررسی به مدیریت پزشکان مراجعه کنید</p>
             </div>
           </div>
-          <PrimaryButton variant="ghost">بررسی درخواست‌ها</PrimaryButton>
+          <PrimaryButton variant="ghost" onClick={() => navigate('/admin/doctors?tab=pending')}>بررسی درخواست‌ها</PrimaryButton>
         </GlassCard>
       )}
     </div>

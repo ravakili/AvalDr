@@ -37,7 +37,7 @@ export const navFor: Record<Role, NavItem[]> = {
     { label: 'نمای کلی', to: '/admin', icon: <IconActivity /> },
     { label: 'مدیریت پزشکان', to: '/admin/doctors', icon: <IconStethoscope /> },
     { label: 'مدیریت کاربران', to: '/admin/users', icon: <IconUsers /> },
-    { label: 'تخصص‌ها', to: '/admin/specialties', icon: <IconShield /> },
+    { label: 'تعاریف', to: '/admin/definitions', icon: <IconShield /> },
     { label: 'لاگ نوبت‌ها', to: '/admin/logs', icon: <IconLog /> },
     { label: 'برداشت‌ها', to: '/admin/withdrawals', icon: <IconWallet /> },
     { label: 'تنظیمات', to: '/admin/settings', icon: <IconSettings /> },

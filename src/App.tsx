@@ -32,7 +32,7 @@ import DoctorProfile from './pages/doctor/DoctorProfile'
 import AdminOverview from './pages/admin/AdminOverview'
 import ManageDoctors from './pages/admin/ManageDoctors'
 import ManageUsers from './pages/admin/ManageUsers'
-import ManageSpecialties from './pages/admin/ManageSpecialties'
+import AdminDefinitions from './pages/admin/AdminDefinitions'
 import AppointmentLogs from './pages/admin/AppointmentLogs'
 import WithdrawalRequests from './pages/admin/WithdrawalRequests'
 import SystemSettings from './pages/admin/SystemSettings'
@@ -115,7 +115,7 @@ export default function App() {
         <Route index element={<AdminOverview />} />
         <Route path="doctors" element={<ManageDoctors />} />
         <Route path="users" element={<ManageUsers />} />
-        <Route path="specialties" element={<ManageSpecialties />} />
+        <Route path="definitions" element={<AdminDefinitions />} />
         <Route path="logs" element={<AppointmentLogs />} />
         <Route path="withdrawals" element={<WithdrawalRequests />} />
         <Route path="settings" element={<SystemSettings />} />
