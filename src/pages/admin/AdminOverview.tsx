@@ -53,10 +53,17 @@ const actionLabels: Record<string, string> = {
 
 const tooltipStyle = {
   borderRadius: 12,
-  border: '1px solid rgba(255,255,255,0.5)',
+  border: '1px solid rgb(var(--color-primary-300) / 0.35)',
+  backgroundColor: 'rgb(15 23 42 / 0.96)',
+  color: '#f8fafc',
   fontFamily: 'Vazirmatn',
   fontSize: 12,
 }
+
+const primaryChartColor = 'rgb(var(--color-primary-500))'
+const primaryChartLight = 'rgb(var(--color-primary-300))'
+const chartGridColor = 'rgb(148 163 184 / 0.24)'
+const chartAxisColor = '#94a3b8'
 
 export default function AdminOverview() {
   const navigate = useNavigate()
@@ -111,21 +118,21 @@ export default function AdminOverview() {
               <AreaChart data={userGrowthData} margin={{ top: 8, right: 8, bottom: 0, left: -8 }}>
                 <defs>
                   <linearGradient id="usersGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#2196b3" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#2196b3" stopOpacity={0} />
+                    <stop offset="0%" stopColor={primaryChartColor} stopOpacity={0.4} />
+                    <stop offset="100%" stopColor={primaryChartColor} stopOpacity={0} />
                   </linearGradient>
                   <linearGradient id="docsGrad" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="#a78bfa" stopOpacity={0.4} />
-                    <stop offset="100%" stopColor="#a78bfa" stopOpacity={0} />
+                    <stop offset="0%" stopColor={primaryChartLight} stopOpacity={0.32} />
+                    <stop offset="100%" stopColor={primaryChartLight} stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 11, fontFamily: 'Vazirmatn' }} stroke="#7a8898" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#7a8898" tickFormatter={(v) => toFa(v)} />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 11, fontFamily: 'Vazirmatn' }} stroke={chartAxisColor} />
+                <YAxis tick={{ fontSize: 11 }} stroke={chartAxisColor} tickFormatter={(v) => toFa(v)} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v) => toFa(Number(v))} />
                 <Legend wrapperStyle={{ fontFamily: 'Vazirmatn', fontSize: 12 }} />
-                <Area type="monotone" dataKey="users" name="کاربران" stroke="#2196b3" strokeWidth={2} fill="url(#usersGrad)" />
-                <Area type="monotone" dataKey="doctors" name="پزشکان" stroke="#a78bfa" strokeWidth={2} fill="url(#docsGrad)" />
+                <Area type="monotone" dataKey="users" name="کاربران" stroke={primaryChartColor} strokeWidth={2} fill="url(#usersGrad)" />
+                <Area type="monotone" dataKey="doctors" name="پزشکان" stroke={primaryChartLight} strokeWidth={2} fill="url(#docsGrad)" />
               </AreaChart>
             </ResponsiveContainer>
           </div>
@@ -135,11 +142,11 @@ export default function AdminOverview() {
           <div className="h-64" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={revenueData} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-                <XAxis dataKey="month" tick={{ fontSize: 10, fontFamily: 'Vazirmatn' }} stroke="#7a8898" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#7a8898" tickFormatter={(v) => toFa(v)} />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
+                <XAxis dataKey="month" tick={{ fontSize: 10, fontFamily: 'Vazirmatn' }} stroke={chartAxisColor} />
+                <YAxis tick={{ fontSize: 11 }} stroke={chartAxisColor} tickFormatter={(v) => toFa(v)} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v) => [`${toFa(Number(v))} میلیون`, 'درآمد']} />
-                <Bar dataKey="revenue" fill="#2196b3" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="revenue" fill={primaryChartColor} radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -160,11 +167,11 @@ export default function AdminOverview() {
                 ]}
                 margin={{ top: 8, right: 8, bottom: 0, left: -16 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-                <XAxis dataKey="day" tick={{ fontSize: 10, fontFamily: 'Vazirmatn' }} stroke="#7a8898" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#7a8898" tickFormatter={(v) => toFa(v)} />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
+                <XAxis dataKey="day" tick={{ fontSize: 10, fontFamily: 'Vazirmatn' }} stroke={chartAxisColor} />
+                <YAxis tick={{ fontSize: 11 }} stroke={chartAxisColor} tickFormatter={(v) => toFa(v)} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v) => [toFa(Number(v)), 'نوبت']} />
-                <Line type="monotone" dataKey="count" stroke="#2196b3" strokeWidth={3} dot={{ r: 4, fill: '#2196b3' }} />
+                <Line type="monotone" dataKey="count" stroke={primaryChartColor} strokeWidth={3} dot={{ r: 4, fill: primaryChartColor }} />
               </LineChart>
             </ResponsiveContainer>
           </div>

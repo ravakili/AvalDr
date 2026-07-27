@@ -28,6 +28,9 @@ import { appointments, doctorEarnings, getPatient } from '../../data/mockData'
 import { formatDateFa, formatToman, toFa } from '../../lib/utils'
 
 const ME = 'doc-1'
+const primaryChartColor = 'rgb(var(--color-primary-500))'
+const chartGridColor = 'rgb(148 163 184 / 0.24)'
+const chartAxisColor = '#94a3b8'
 
 export default function DoctorOverview() {
   const mine = appointments.filter((a) => a.doctorId === ME)
@@ -118,15 +121,22 @@ export default function DoctorOverview() {
           <div className="h-56" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={doctorEarnings.weekly} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(0,0,0,0.06)" vertical={false} />
-                <XAxis dataKey="week" tick={{ fontSize: 12, fontFamily: 'Vazirmatn' }} stroke="#7a8898" />
-                <YAxis tick={{ fontSize: 11 }} stroke="#7a8898" tickFormatter={(v) => toFa(v / 1000000)} />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
+                <XAxis dataKey="week" tick={{ fontSize: 12, fontFamily: 'Vazirmatn' }} stroke={chartAxisColor} />
+                <YAxis tick={{ fontSize: 11 }} stroke={chartAxisColor} tickFormatter={(v) => toFa(v / 1000000)} />
                 <Tooltip
-                  cursor={{ fill: 'rgba(33,150,179,0.08)' }}
+                  cursor={{ fill: 'rgb(var(--color-primary-500) / 0.12)' }}
                   formatter={(v) => [formatToman(Number(v)), 'درآمد']}
-                  contentStyle={{ borderRadius: 12, border: '1px solid rgba(255,255,255,0.5)', fontFamily: 'Vazirmatn', fontSize: 12 }}
+                  contentStyle={{
+                    borderRadius: 12,
+                    border: '1px solid rgb(var(--color-primary-300) / 0.35)',
+                    backgroundColor: 'rgb(15 23 42 / 0.96)',
+                    color: '#f8fafc',
+                    fontFamily: 'Vazirmatn',
+                    fontSize: 12,
+                  }}
                 />
-                <Bar dataKey="amount" fill="#2196b3" radius={[8, 8, 0, 0]} />
+                <Bar dataKey="amount" fill={primaryChartColor} radius={[8, 8, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

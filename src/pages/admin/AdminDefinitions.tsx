@@ -3,6 +3,7 @@ import GlassCard from '../../components/ui/GlassCard'
 import PrimaryButton from '../../components/ui/PrimaryButton'
 import Modal from '../../components/ui/Modal'
 import InputField, { TextArea } from '../../components/ui/InputField'
+import Tabs from '../../components/ui/Tabs'
 import EmptyState from '../../components/ui/EmptyState'
 import {
   IconCheck,
@@ -26,7 +27,7 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'allergies', label: 'آلرژی‌ها' },
   { key: 'drugs', label: 'داروها' },
   { key: 'cities', label: 'شهرها' },
-  { key: 'tips', label: 'نکات روزانه سلامت' },
+  { key: 'tips', label: 'نکات' },
 ]
 
 export default function AdminDefinitions() {
@@ -230,23 +231,7 @@ export default function AdminDefinitions() {
 
   return (
     <div className="space-y-5">
-      <GlassCard className="p-4">
-        <div className="flex flex-wrap items-center gap-1.5">
-          {tabs.map((t) => (
-            <button
-              key={t.key}
-              onClick={() => setTab(t.key)}
-              className={`rounded-xl px-3.5 py-2 text-xs font-medium transition ${
-                tab === t.key
-                  ? 'bg-primary-500 text-white shadow-glass-sm'
-                  : 'bg-white/40 text-ink-500 hover:bg-white/60'
-              }`}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </GlassCard>
+      <Tabs tabs={tabs} active={tab} onChange={(k) => setTab(k as Tab)} />
 
       <GlassCard className="flex items-center justify-between p-4">
         <div>

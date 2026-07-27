@@ -1,4 +1,5 @@
-import { Link } from 'react-router-dom'
+import { useRef, useState } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import GlassCard from '../../components/ui/GlassCard'
 import PrimaryButton from '../../components/ui/PrimaryButton'
 import Avatar from '../../components/ui/Avatar'
@@ -17,6 +18,7 @@ import {
   IconPlus,
   IconPrescription,
   IconSearch,
+  IconUpload,
   IconVideo,
 } from '../../components/ui/icons'
 import {
@@ -48,6 +50,7 @@ const tips = [
 ]
 
 export default function UserHome() {
+  const navigate = useNavigate()
   const mine = appointments
     .filter((a) => a.patientId === ME)
     .sort((a, b) => a.date.localeCompare(b.date))
@@ -59,6 +62,20 @@ export default function UserHome() {
 
   const nextAppt = upcoming[0]
   const nextTarget = nextAppt ? `${nextAppt.date}T${nextAppt.time}:00` : null
+
+  const [pendingReports, setPendingReports] = useState<{ name: string; saved: boolean }[]>([])
+  const reportInputRef = useRef<HTMLInputElement>(null)
+
+  const handleReportSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPendingReports(prev => [...prev, { name: file.name, saved: false }])
+    e.target.value = ''
+  }
+
+  const saveReport = (idx: number) => {
+    setPendingReports(prev => prev.map((r, i) => i === idx ? { ...r, saved: true } : r))
+  }
 
   return (
     <div className="space-y-6">
@@ -155,6 +172,7 @@ export default function UserHome() {
               icon={
                 nextAppt.consultType === 'video' ? <IconVideo className="h-4 w-4" /> : <IconChat className="h-4 w-4" />
               }
+              onClick={() => navigate(`/doctor/consult/${nextAppt.id}`)}
             >
               شروع مشاوره
             </PrimaryButton>
@@ -313,11 +331,10 @@ export default function UserHome() {
               <IconActivity className="h-5 w-5 text-primary-500" />
               <h3 className="font-bold text-ink-800">گزارش‌های پزشکی</h3>
             </div>
-            <Link to="/user/profile">
-              <PrimaryButton size="sm" variant="ghost" icon={<IconPlus className="h-4 w-4" />}>
-                افزودن
-              </PrimaryButton>
-            </Link>
+            <input ref={reportInputRef} type="file" className="hidden" onChange={handleReportSelect} accept=".pdf,.jpg,.png,.doc,.docx" />
+            <PrimaryButton size="sm" variant="ghost" icon={<IconPlus className="h-4 w-4" />} onClick={() => reportInputRef.current?.click()}>
+              افزودن گزارش پزشکی
+            </PrimaryButton>
           </div>
           <div className="space-y-3">
             {[
@@ -341,6 +358,27 @@ export default function UserHome() {
                 <button className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 transition hover:bg-primary-50 hover:text-primary-600">
                   <IconDownload className="h-4 w-4" />
                 </button>
+              </div>
+            ))}
+            {pendingReports.map((r, idx) => (
+              <div
+                key={idx}
+                className="flex items-center gap-3 rounded-2xl border border-dashed border-primary-300/60 bg-primary-50/40 p-3 transition"
+              >
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/70 text-primary-600">
+                  <IconUpload className="h-5 w-5" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink-800">{r.name}</p>
+                  <p className="text-xs text-ink-400">آماده ذخیره</p>
+                </div>
+                <PrimaryButton
+                  size="sm"
+                  disabled={r.saved}
+                  onClick={() => saveReport(idx)}
+                >
+                  {r.saved ? 'ذخیره شد' : 'ذخیره'}
+                </PrimaryButton>
               </div>
             ))}
           </div>

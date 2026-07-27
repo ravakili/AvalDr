@@ -16,13 +16,13 @@ interface Props {
 
 export default function Tabs({ tabs, active, onChange, className }: Props) {
   return (
-    <GlassCard className={cn('flex flex-wrap items-center gap-1.5 p-2', className)}>
+    <GlassCard className={cn('flex flex-nowrap items-center gap-1 overflow-x-auto p-1 scrollbar-none', className)}>
       {tabs.map((t) => (
         <button
           key={t.key}
           onClick={() => onChange(t.key)}
           className={cn(
-            'inline-flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-sm font-medium transition',
+            'inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition',
             active === t.key
               ? 'bg-primary-500 text-white shadow-glass-sm'
               : 'text-ink-500 hover:bg-white/60',

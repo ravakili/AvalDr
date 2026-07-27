@@ -6,6 +6,9 @@ import { roleLabel } from "./nav";
 import type { Role } from "../../types";
 import { Link, NavLink } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { Moon, Palette, Sun } from "lucide-react";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { useTheme } from "../../lib/theme";
 
 interface Props {
   role: Role;
@@ -17,9 +20,10 @@ interface Props {
 export default function Topbar({ role, title, subtitle, onMenu }: Props) {
   const user = useAuthStore((s) => s.user);
   const [open, setOpen] = useState(false);
+  const { mode, accent, toggleMode, cycleAccent } = useTheme();
 
   return (
-    <header className="glass sticky top-6 z-20 mb-6 flex items-center gap-4 rounded-2xl px-5 py-3.5">
+    <header className="glass sticky top-6 z-20 mb-6 flex items-center gap-2 rounded-2xl px-3 py-3.5 sm:gap-4 sm:px-5">
       {/* <button
         className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-white/60 hidden"
         onClick={onMenu}
@@ -49,6 +53,37 @@ export default function Topbar({ role, title, subtitle, onMenu }: Props) {
           />
         </div>
       </div>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={toggleMode}
+            className="glass-soft relative grid h-10 w-10 shrink-0 place-items-center rounded-xl text-ink-600 transition hover:bg-white/70"
+            aria-label={mode === "dark" ? "فعال‌کردن حالت روشن" : "فعال‌کردن حالت تاریک"}
+          >
+            {mode === "dark" ? <Sun className="h-5 w-5" /> : <Moon className="h-5 w-5" />}
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>
+          {mode === "dark" ? "حالت روشن" : "حالت تاریک"}
+        </TooltipContent>
+      </Tooltip>
+
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            type="button"
+            onClick={cycleAccent}
+            className="glass-soft relative grid h-10 w-10 shrink-0 place-items-center rounded-xl text-primary-600 transition hover:bg-white/70"
+            aria-label={`تغییر رنگ اصلی؛ رنگ فعلی ${accent}`}
+          >
+            <Palette className="h-5 w-5" />
+            <span className="absolute bottom-1.5 right-1.5 h-2 w-2 rounded-full bg-primary-500 ring-1 ring-white" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>تغییر رنگ اصلی</TooltipContent>
+      </Tooltip>
 
       {/* Notifications */}
       <div className="relative">

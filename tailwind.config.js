@@ -7,18 +7,17 @@ export default {
         vazirmatn: ['Vazirmatn', 'Tahoma', 'sans-serif'],
       },
       colors: {
-        // Primary medical teal-blue palette
         primary: {
-          50: '#eef9fb',
-          100: '#d4f0f5',
-          200: '#abe0ea',
-          300: '#74c9dc',
-          400: '#3faec9',
-          500: '#2196b3', // base primary
-          600: '#1b7a93',
-          700: '#186277',
-          800: '#195162',
-          900: '#1a4453',
+          50: 'rgb(var(--color-primary-50) / <alpha-value>)',
+          100: 'rgb(var(--color-primary-100) / <alpha-value>)',
+          200: 'rgb(var(--color-primary-200) / <alpha-value>)',
+          300: 'rgb(var(--color-primary-300) / <alpha-value>)',
+          400: 'rgb(var(--color-primary-400) / <alpha-value>)',
+          500: 'rgb(var(--color-primary-500) / <alpha-value>)',
+          600: 'rgb(var(--color-primary-600) / <alpha-value>)',
+          700: 'rgb(var(--color-primary-700) / <alpha-value>)',
+          800: 'rgb(var(--color-primary-800) / <alpha-value>)',
+          900: 'rgb(var(--color-primary-900) / <alpha-value>)',
         },
         // Neutral slate for text
         ink: {

@@ -1,11 +1,10 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import GlassCard from "../../components/ui/GlassCard";
 import PrimaryButton from "../../components/ui/PrimaryButton";
 import Avatar from "../../components/ui/Avatar";
 import InputField, { SelectField } from "../../components/ui/InputField";
 import Toggle from "../../components/ui/Toggle";
 import Tabs from "../../components/ui/Tabs";
-import FileUpload from "../../components/ui/FileUpload";
 import Badge from "../../components/ui/Badge";
 import { useAuthStore } from "../../store/authStore";
 import { defaultNotificationPrefs, getPatient } from "../../data/mockData";
@@ -17,10 +16,11 @@ import {
   IconLogout,
   IconPlus,
   IconShield,
+  IconUpload,
 } from "../../components/ui/icons";
 import { roleLabel } from "../../components/layout/nav";
 
-type Section = "personal" | "medical" | "documents" | "notifications";
+type Section = "personal" | "medical" | "reports" | "notifications";
 
 // Editable medical-record categories. Each keeps its own state seeded from
 // the patient's mock data, and exposes a list of options to add via select.
@@ -59,6 +59,20 @@ export default function UserProfile() {
   const [section, setSection] = useState<Section>("personal");
   const [prefs, setPrefs] = useState(defaultNotificationPrefs);
   const logout = useAuthStore((s) => s.logout);
+
+  const [pendingReports, setPendingReports] = useState<{ name: string; saved: boolean }[]>([])
+  const reportInputRef = useRef<HTMLInputElement>(null)
+
+  const handleReportSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setPendingReports(prev => [...prev, { name: file.name, saved: false }])
+    e.target.value = ''
+  }
+
+  const saveReport = (idx: number) => {
+    setPendingReports(prev => prev.map((r, i) => i === idx ? { ...r, saved: true } : r))
+  }
 
   // Editable medical-record categories, seeded from mock data.
   const [diagnoses, setDiagnoses] = useState<string[]>(
@@ -121,7 +135,7 @@ export default function UserProfile() {
           tabs={[
             { key: "personal", label: "اطلاعات شخصی" },
             { key: "medical", label: "پرونده پزشکی" },
-            { key: "documents", label: "مدارک" },
+            { key: "reports", label: "گزارش‌های پزشکی" },
             { key: "notifications", label: "اعلان‌ها" },
           ]}
         />
@@ -218,42 +232,64 @@ export default function UserProfile() {
           </div>
         )}
 
-        {section === "documents" && (
+        {section === "reports" && (
           <div className="space-y-5">
-            <FileUpload />
-            <div>
-              <p className="mb-2 text-sm font-medium text-ink-700">
-                مدارک آپلودشده
-              </p>
-              <div className="space-y-2">
-                {me.medicalHistory?.documents?.length ? (
-                  me.medicalHistory.documents.map((doc) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center gap-3 rounded-xl border border-white/50 bg-white/40 p-3"
-                    >
-                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary-50 text-primary-600">
-                        <IconFile />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-ink-700">
-                          {doc.name}
-                        </p>
-                        <p className="text-[11px] uppercase text-ink-400">
-                          {doc.type}
-                        </p>
-                      </div>
-                      <button className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-primary-50 hover:text-primary-600">
-                        <IconDownload className="h-4 w-4" />
-                      </button>
+            <div className="flex items-center justify-between">
+              <p className="text-sm font-medium text-ink-700">گزارش‌های پزشکی</p>
+              <input ref={reportInputRef} type="file" className="hidden" onChange={handleReportSelect} accept=".pdf,.jpg,.png,.doc,.docx" />
+              <PrimaryButton size="sm" icon={<IconPlus className="h-4 w-4" />} onClick={() => reportInputRef.current?.click()}>
+                افزودن گزارش
+              </PrimaryButton>
+            </div>
+            <div className="space-y-2">
+              {me.medicalHistory?.documents?.length ? (
+                me.medicalHistory.documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    className="flex items-center gap-3 rounded-xl border border-white/50 bg-white/40 p-3"
+                  >
+                    <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-primary-50 text-primary-600">
+                      <IconFile />
                     </div>
-                  ))
-                ) : (
-                  <p className="text-xs text-ink-400">
-                    مدرکی بارگذاری نشده است.
-                  </p>
-                )}
-              </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-medium text-ink-700">
+                        {doc.name}
+                      </p>
+                      <p className="text-[11px] uppercase text-ink-400">
+                        {doc.type}
+                      </p>
+                    </div>
+                    <button className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 hover:bg-primary-50 hover:text-primary-600">
+                      <IconDownload className="h-4 w-4" />
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <p className="text-xs text-ink-400">
+                  گزارشی بارگذاری نشده است.
+                </p>
+              )}
+              {pendingReports.map((r, idx) => (
+                <div
+                  key={idx}
+                  className="flex items-center gap-3 rounded-xl border border-dashed border-primary-300/60 bg-primary-50/40 p-3"
+                >
+                  <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-white/70 text-primary-600">
+                    <IconUpload className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-ink-700">{r.name}</p>
+                    <p className="text-[11px] text-ink-400">آماده ذخیره</p>
+                  </div>
+                  <PrimaryButton
+                    size="sm"
+                    disabled={r.saved}
+                    onClick={() => saveReport(idx)}
+                  >
+                    {r.saved ? 'ذخیره شد' : 'ذخیره'}
+                  </PrimaryButton>
+                </div>
+              ))}
             </div>
           </div>
         )}

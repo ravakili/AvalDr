@@ -131,7 +131,7 @@ export default function MyAppointments() {
 
                   <div className="flex shrink-0 flex-wrap gap-2">
                     {(a.status === 'waiting' || a.status === 'in-progress') && (
-                      <PrimaryButton size="sm" variant="ghost" icon={<ConsultIcon className="h-4 w-4" />}>
+                      <PrimaryButton size="sm" variant="ghost" icon={<ConsultIcon className="h-4 w-4" />} onClick={() => navigate(`/doctor/consult/${a.id}`)}>
                         ورود به مشاوره
                       </PrimaryButton>
                     )}

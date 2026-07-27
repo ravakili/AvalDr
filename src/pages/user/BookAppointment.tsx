@@ -167,28 +167,55 @@ export default function BookAppointment() {
   return (
     <div className="space-y-6">
       {/* Doctor summary */}
-      <GlassCard className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center">
-        <Avatar src={doctor.avatar} size="xl" ring />
-        <div className="flex-1">
-          <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-xl font-bold text-ink-800">{doctor.name}</h2>
-            <Badge tone="amber">
-              <IconStar className="h-3 w-3" /> {toFa(doctor.rating.toFixed(1))}
-            </Badge>
+      <GlassCard className="p-5">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
+          <Avatar src={doctor.avatar} size="xl" ring />
+          <div className="min-w-0 flex-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h2 className="text-xl font-bold text-ink-800">{doctor.name}</h2>
+              <Badge tone="amber">
+                <IconStar className="h-3 w-3" /> {toFa(doctor.rating.toFixed(1))}
+              </Badge>
+              {doctor.verified && <Badge tone="green">تأیید شده</Badge>}
+            </div>
+            <p className="mt-1 text-sm text-primary-600">
+              {specialty?.icon} {specialty?.name}
+            </p>
+            <p className="mt-2 text-sm leading-6 text-ink-500">{doctor.bio}</p>
+            <div className="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-xs text-ink-500">
+              <span className="inline-flex items-center gap-1"><IconPin className="h-3.5 w-3.5" /> {doctor.city}</span>
+              <span className="inline-flex items-center gap-1"><IconCalendar className="h-3.5 w-3.5" /> {toFa(doctor.experienceYears)} سال تجربه</span>
+              <span className="inline-flex items-center gap-1"><IconStar className="h-3.5 w-3.5" /> {toFa(doctor.rating.toFixed(1))} ({toFa(doctor.reviewsCount)} نظر)</span>
+            </div>
+            <div className="mt-3 flex flex-wrap items-center gap-2 rounded-xl border border-white/50 bg-white/40 p-3">
+              <IconPin className="h-4 w-4 shrink-0 text-primary-500" />
+              <div>
+                <p className="text-sm font-medium text-ink-800">{doctor.hospital}</p>
+                <p className="text-xs text-ink-400">{doctor.city}</p>
+              </div>
+            </div>
           </div>
-          <p className="mt-1 text-sm text-primary-600">
-            {specialty?.icon} {specialty?.name}
-          </p>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-ink-500">
-            <span className="inline-flex items-center gap-1"><IconPin className="h-3.5 w-3.5" /> {doctor.city}</span>
-            <span className="inline-flex items-center gap-1"><IconCalendar className="h-3.5 w-3.5" /> {toFa(doctor.experienceYears)} سال تجربه</span>
-            <span className="inline-flex items-center gap-1"><IconClock className="h-3.5 w-3.5" /> {doctor.hospital}</span>
+          <div className="shrink-0 rounded-2xl border border-white/50 bg-white/50 px-5 py-3 text-center">
+            <p className="text-xs text-ink-400">تعرفه ویزیت</p>
+            <p className="text-lg font-bold text-ink-800 tabular">{formatToman(commFee[consultType])}</p>
           </div>
         </div>
-        <div className="rounded-2xl border border-white/50 bg-white/50 px-5 py-3 text-center">
-          <p className="text-xs text-ink-400">تعرفه ویزیت</p>
-          <p className="text-lg font-bold text-ink-800 tabular">{formatToman(commFee[consultType])}</p>
-        </div>
+
+        {/* Working hours */}
+        {doctor.workingHours.length > 0 && (
+          <div className="mt-4 border-t border-white/50 pt-4">
+            <p className="mb-2 text-sm font-medium text-ink-700">روزها و ساعات در دسترس</p>
+            <div className="flex flex-wrap gap-2">
+              {doctor.workingHours.map((wh, i) => (
+                <div key={i} className="rounded-xl border border-white/50 bg-white/40 px-3 py-2 text-xs">
+                  <span className="font-semibold text-ink-800">{wh.day}</span>
+                  <span className="mx-1 text-ink-300">|</span>
+                  <span className="tabular text-ink-600">{toFa(wh.from)} تا {toFa(wh.to)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
       </GlassCard>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">

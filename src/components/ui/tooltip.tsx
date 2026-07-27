@@ -6,7 +6,7 @@ export function TooltipProvider({ children }: { children: React.ReactNode }) {
 }
 
 export function Tooltip({ children }: { children: React.ReactNode }) {
-  return <div className="relative inline-block">{children}</div>
+  return <div className="group relative inline-block">{children}</div>
 }
 
 export function TooltipTrigger({ 

@@ -262,42 +262,7 @@ export default function DoctorProfile() {
           </div>
         </GlassCard>
 
-        {/* Payment info card in sidebar */}
-        <GlassCard className="p-6">
-          <div className="mb-4 flex items-center gap-2">
-            <IconWallet className="h-5 w-5 text-primary-500" />
-            <h3 className="font-bold text-ink-800">اطلاعات پرداخت</h3>
-          </div>
-          <div className="space-y-3">
-            <InputField
-              label="شماره کارت"
-              name="card"
-              dir="ltr"
-              className="text-right"
-              value={cardNumber}
-              onChange={(e) => setCardNumber(e.target.value)}
-              placeholder="۶۰۳۷-XXXX-XXXX-XXXX"
-            />
-            <InputField
-              label="شماره حساب"
-              name="account"
-              dir="ltr"
-              className="text-right"
-              value={accountNumber}
-              onChange={(e) => setAccountNumber(e.target.value)}
-              placeholder="XXXXXXXXXX"
-            />
-            <InputField
-              label="شماره شبا"
-              name="shaba"
-              dir="ltr"
-              className="text-right"
-              value={shaba}
-              onChange={(e) => setShaba(e.target.value)}
-              placeholder="IRXXXXXXXXXXXXXXXXXXX"
-            />
-          </div>
-        </GlassCard>
+      
       </div>
 
       {/* Main content with tabs */}
@@ -386,8 +351,7 @@ function ProfileTab({
   setLocation: (v: string) => void;
 }) {
   return (
-    <div className="space-y-6">
-      <h3 className="font-bold text-ink-800">پروفایل حرفه‌ای</h3>
+    <div className="space-y-6 mt-4">
       <p className="text-xs text-ink-400">
         اطلاعات تخصصی، آدرس و لوکیشن مطب.
       </p>
@@ -478,8 +442,7 @@ function PaymentTab({
   setShaba: (v: string) => void;
 }) {
   return (
-    <div className="space-y-4">
-      <h3 className="font-bold text-ink-800">اطلاعات پرداخت</h3>
+    <div className="space-y-4 mt-4">
       <p className="text-xs text-ink-400">
         اطلاعات بانکی برای واریز درآمدها.
       </p>
@@ -536,8 +499,7 @@ function HoursTab({
   updateSlot: (idx: number, patch: Partial<{ day: string; from: string; to: string; breakMinutes: number }>) => void;
 }) {
   return (
-    <div className="space-y-4">
-      <h3 className="font-bold text-ink-800">ساعات کاری</h3>
+    <div className="space-y-4 mt-4">
       <p className="text-xs text-ink-400">
         تعریف بازه‌های زمانی برای هر روز هفته. بازه‌های متداخل مجاز نیستند.
       </p>
@@ -651,8 +613,7 @@ function CommTab({
   setCommFee: (type: ConsultType, fee: string) => void;
 }) {
   return (
-    <div className="space-y-4">
-      <h3 className="font-bold text-ink-800">قابلیت‌های ارتباطی</h3>
+    <div className="space-y-4 mt-4">
       <p className="text-xs text-ink-400">
         روش‌های مشاوره و تعرفه هر یک را تنظیم کنید.
       </p>
