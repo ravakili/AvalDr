@@ -1,6 +1,4 @@
 <div align="center">
-  <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=dr-saina&radius=20&backgroundColor=b6e3f4" width="80" alt="AvalDr" />
-
   # اول دکتر — AvalDR
 
   <p dir="rtl"><strong>پلتفرم کامل مشاوره پزشکی آنلاین</strong> — سه پنل مجزا برای بیمار، پزشک و مدیر<br />
