@@ -16,7 +16,7 @@ export default function MobileBottomNav({ role }: Props) {
   const items = navFor[role].slice(0, 5)
 
   return (
-    <nav className="glass fixed inset-x-3 bottom-3 z-30 flex items-stretch justify-around rounded-2xl p-1.5 lg:hidden">
+    <nav className="glass fixed inset-x-3 bottom-3 z-30 flex items-stretch justify-around rounded-full p-1.5 lg:hidden">
       {items.map((item) => (
         <NavLink
           key={item.to}
@@ -24,10 +24,10 @@ export default function MobileBottomNav({ role }: Props) {
           end={item.to === `/${role}`}
           className={({ isActive }) =>
             cn(
-              'flex flex-1 flex-col items-center gap-1 rounded-xl py-2 text-[10px] font-medium transition-all',
+              'flex flex-1 flex-col items-center gap-1 rounded-full py-2 text-[10px] font-medium transition-all',
               isActive
                 ? 'bg-primary-500 text-white shadow-glass-sm'
-                : 'text-ink-500 hover:bg-white/60',
+                : 'text-ink-900 hover:bg-white/60 dark:text-ink-400',
             )
           }
         >
