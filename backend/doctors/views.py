@@ -93,6 +93,17 @@ class DoctorMeViewSet(viewsets.GenericViewSet):
     permission_classes = (IsDoctor,)
     serializer_class = DoctorSerializer
 
+    def _save_avatar(self, user, avatar, request=None):
+        if hasattr(avatar, 'read'):
+            import uuid
+            from django.conf import settings
+            from django.core.files.storage import default_storage
+            ext = avatar.name.rsplit('.', 1)[-1] if '.' in avatar.name else 'jpg'
+            path = default_storage.save(f'avatars/{uuid.uuid4().hex}.{ext}', avatar)
+            url = settings.MEDIA_URL + path
+            user.avatar = request.build_absolute_uri(url) if request else url
+            user.save(update_fields=['avatar'])
+
     def _profile(self, request):
         return get_object_or_404(
             DoctorProfile.objects.select_related('user', 'specialty'),
@@ -104,9 +115,15 @@ class DoctorMeViewSet(viewsets.GenericViewSet):
 
     def partial_update(self, request):
         profile = self._profile(request)
-        serializer = DoctorProfileUpdateSerializer(profile, data=request.data, partial=True)
+        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
+        avatar_file = None
+        if 'avatar' in data and hasattr(data['avatar'], 'read'):
+            avatar_file = data.pop('avatar')
+        serializer = DoctorProfileUpdateSerializer(profile, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
+        if avatar_file:
+            self._save_avatar(profile.user, avatar_file, request)
         return Response(DoctorSerializer(profile).data)
 
     @action(detail=False, methods=('get', 'put'), url_path='communication')

@@ -48,6 +48,7 @@ class WorkingHour(models.Model):
     from_time = models.TimeField()
     to_time = models.TimeField()
     break_minutes = models.IntegerField(default=0)
+    appointment_duration_minutes = models.IntegerField(default=30)
 
     class Meta:
         db_table = 'working_hours'
@@ -71,6 +72,7 @@ class CommunicationSetting(models.Model):
     chat_fee = models.PositiveIntegerField(default=100000)
     audio_fee = models.PositiveIntegerField(default=150000)
     video_fee = models.PositiveIntegerField(default=250000)
+    chat_auto_close_minutes = models.PositiveIntegerField(default=1440)
 
     class Meta:
         db_table = 'communication_settings'

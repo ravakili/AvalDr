@@ -11,6 +11,8 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework_simplejwt.tokens import RefreshToken
 
+from .services import send_otp_sms
+
 from config.permissions import IsPatient
 
 from .models import PatientProfile
@@ -39,6 +41,7 @@ class AuthViewSet(viewsets.GenericViewSet):
     permission_classes = (AllowAny,)
     serializer_class = SendOTPSerializer
 
+
     def create(self, request):
         serializer = SendOTPSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -53,6 +56,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         code = ''.join(random.choices(string.digits, k=6))
         cache.set(f'otp:{phone}', code, settings.OTP_TTL_SECONDS)
         cache.set(resend_key, resend_count + 1, settings.OTP_TTL_SECONDS)
+        send_otp_sms(phone, code)
         payload = {'message': 'کد تأیید ارسال شد.', 'expiresIn': settings.OTP_TTL_SECONDS}
         if settings.DEBUG and settings.RETURN_OTP_IN_DEBUG:
             payload['debugCode'] = code
@@ -82,13 +86,26 @@ class AccountViewSet(viewsets.GenericViewSet):
     parser_classes = (JSONParser, MultiPartParser, FormParser)
     serializer_class = UserSerializer
 
+    def _save_avatar(self, user, avatar, request=None):
+        if hasattr(avatar, 'read'):  # uploaded file
+            import uuid
+            from django.conf import settings
+            from django.core.files.storage import default_storage
+            ext = avatar.name.rsplit('.', 1)[-1] if '.' in avatar.name else 'jpg'
+            path = default_storage.save(f'avatars/{uuid.uuid4().hex}.{ext}', avatar)
+            url = settings.MEDIA_URL + path
+            user.avatar = request.build_absolute_uri(url) if request else url
+        else:
+            user.avatar = avatar
+
     @action(detail=False, methods=('get', 'patch'), url_path='me')
     def me(self, request):
         if request.method == 'PATCH':
             user = request.user
-            for field in ('email', 'avatar'):
-                if field in request.data:
-                    setattr(user, field, request.data[field])
+            if 'email' in request.data:
+                user.email = request.data['email']
+            if 'avatar' in request.data:
+                self._save_avatar(user, request.data['avatar'], request)
             if 'name' in request.data:
                 parts = request.data['name'].strip().split(maxsplit=1)
                 user.first_name = parts[0]

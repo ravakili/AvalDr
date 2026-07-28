@@ -9,10 +9,11 @@ from .models import CommunicationSetting, DoctorDocument, DoctorProfile, Working
 class WorkingHourSerializer(serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
     breakMinutes = serializers.IntegerField(source='break_minutes', min_value=0, max_value=180)
+    appointmentDurationMinutes = serializers.IntegerField(source='appointment_duration_minutes', min_value=5, max_value=180, required=False)
 
     class Meta:
         model = WorkingHour
-        fields = ('id', 'day', 'breakMinutes')
+        fields = ('id', 'day', 'breakMinutes', 'appointmentDurationMinutes')
         read_only_fields = ('id',)
 
     def get_fields(self):
@@ -47,10 +48,11 @@ class CommunicationSettingSerializer(serializers.ModelSerializer):
     chat = serializers.SerializerMethodField()
     audio = serializers.SerializerMethodField()
     video = serializers.SerializerMethodField()
+    chatAutoCloseMinutes = serializers.IntegerField(source='chat_auto_close_minutes', min_value=0, required=False)
 
     class Meta:
         model = CommunicationSetting
-        fields = ('chat', 'audio', 'video')
+        fields = ('chat', 'audio', 'video', 'chatAutoCloseMinutes')
 
     @extend_schema_field(serializers.DictField)
     def get_chat(self, obj):
@@ -77,6 +79,8 @@ class CommunicationSettingSerializer(serializers.ModelSerializer):
                 if fee < 0:
                     raise serializers.ValidationError({consult_type: 'تعرفه نمی‌تواند منفی باشد.'})
                 setattr(instance, f'{consult_type}_fee', fee)
+        if 'chat_auto_close_minutes' in validated_data:
+            instance.chat_auto_close_minutes = validated_data['chat_auto_close_minutes']
         instance.save()
         return instance
 
@@ -107,6 +111,8 @@ class DoctorSerializer(serializers.ModelSerializer):
     reviewsCount = serializers.IntegerField(source='reviews_count', read_only=True)
     workingHours = WorkingHourSerializer(source='working_hours', many=True, read_only=True)
     communication = CommunicationSettingSerializer(source='comm_settings', read_only=True)
+    cardNumber = serializers.CharField(source='card_number', read_only=True)
+    accountNumber = serializers.CharField(source='account_number', read_only=True)
 
     class Meta:
         model = DoctorProfile
@@ -115,6 +121,7 @@ class DoctorSerializer(serializers.ModelSerializer):
             'specialtyIcon', 'city', 'hospital', 'address', 'location', 'experienceYears',
             'rating', 'reviewsCount', 'fee', 'status', 'bio', 'workingHours', 'verified',
             'communication',
+            'cardNumber', 'accountNumber', 'shaba',
         )
         read_only_fields = ('id', 'rating', 'reviewsCount', 'status', 'verified')
 

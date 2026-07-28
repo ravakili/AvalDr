@@ -27,7 +27,7 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
         appointment = appointment_for_user(request.user, appointment_id)
         if not appointment:
             return Response({'detail': 'دسترسی به این گفتگو مجاز نیست.'}, status=403)
-        return Response(ChatMessageSerializer(appointment.messages.all(), many=True).data)
+        return Response(ChatMessageSerializer(appointment.messages.all(), many=True, context={'request': request}).data)
 
     def create(self, request, appointment_id=None):
         appointment = appointment_for_user(request.user, appointment_id)
@@ -35,14 +35,14 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
             return Response({'detail': 'دسترسی به این گفتگو مجاز نیست.'}, status=403)
         if appointment.status not in ('waiting', 'in-progress', 'completed'):
             return Response({'detail': 'گفتگو برای این نوبت فعال نیست.'}, status=409)
-        serializer = ChatMessageSerializer(data=request.data)
+        serializer = ChatMessageSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         message = serializer.save(
             appointment=appointment,
             sender=request.user,
             file_name=getattr(request.data.get('file'), 'name', request.data.get('fileName', '')),
         )
-        return Response(ChatMessageSerializer(message).data, status=status.HTTP_201_CREATED)
+        return Response(ChatMessageSerializer(message, context={'request': request}).data, status=status.HTTP_201_CREATED)
 
 
 class ChatRoomViewSet(viewsets.GenericViewSet):

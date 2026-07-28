@@ -44,13 +44,14 @@ class PatientProfileSerializer(serializers.ModelSerializer):
     receiveNotifications = serializers.BooleanField(source='receive_notifications', required=False)
     receivePromotions = serializers.BooleanField(source='receive_promotions', required=False)
     age = serializers.SerializerMethodField()
+    medicalHistory = serializers.SerializerMethodField()
 
     class Meta:
         model = PatientProfile
         fields = (
             'id', 'name', 'avatar', 'phone', 'email', 'nationalId', 'dateOfBirth',
             'gender', 'city', 'bloodType', 'emergencyContact', 'receiveNotifications',
-            'receivePromotions', 'age', 'suspended',
+            'receivePromotions', 'age', 'medicalHistory', 'suspended',
         )
         read_only_fields = ('id', 'suspended')
 
@@ -65,6 +66,13 @@ class PatientProfileSerializer(serializers.ModelSerializer):
             - obj.birth_date.year
             - ((today.month, today.day) < (obj.birth_date.month, obj.birth_date.day))
         )
+
+    def get_medicalHistory(self, obj):
+        from medical.models import MedicalRecord
+        from medical.serializers import MedicalRecordSerializer
+
+        record, _ = MedicalRecord.objects.get_or_create(patient=obj.user)
+        return MedicalRecordSerializer(record).data
 
     def update(self, instance, validated_data):
         user_data = validated_data.pop('user', {})
@@ -108,7 +116,12 @@ class CompleteProfileSerializer(serializers.Serializer):
         if not attrs['acceptTerms'] or not attrs['acceptPrivacy']:
             raise serializers.ValidationError('پذیرش قوانین و حریم خصوصی الزامی است.')
         if attrs['isDoctor'] and not attrs.get('specialty'):
-            raise serializers.ValidationError({'specialtyId': 'انتخاب تخصص برای پزشک الزامی است.'})
+            attrs['specialty'] = (
+                Specialty.objects.filter(name='پزشک عمومی').first()
+                or Specialty.objects.first()
+            )
+            if not attrs['specialty']:
+                raise serializers.ValidationError({'specialtyId': 'هیچ تخصصی در سامانه تعریف نشده است.'})
         return attrs
 
     @transaction.atomic

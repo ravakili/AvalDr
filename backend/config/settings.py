@@ -116,14 +116,8 @@ REST_FRAMEWORK = {
     'DEFAULT_SCHEMA_CLASS': 'drf_spectacular.openapi.AutoSchema',
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 50,
-    'DEFAULT_THROTTLE_CLASSES': [
-        'rest_framework.throttling.AnonRateThrottle',
-        'rest_framework.throttling.UserRateThrottle',
-    ],
-    'DEFAULT_THROTTLE_RATES': {
-        'anon': '100/hour',
-        'user': '1000/hour',
-    },
+    'DEFAULT_THROTTLE_CLASSES': [],
+    'DEFAULT_THROTTLE_RATES': {},
 }
 
 SPECTACULAR_SETTINGS = {
@@ -164,9 +158,12 @@ CELERY_TIMEZONE = 'Asia/Tehran'
 FILE_UPLOAD_MAX_MEMORY_SIZE = 10 * 1024 * 1024
 DATA_UPLOAD_MAX_MEMORY_SIZE = 50 * 1024 * 1024
 
-OTP_TTL_SECONDS = int(os.getenv('OTP_TTL_SECONDS', '120'))
-OTP_MAX_RESENDS = int(os.getenv('OTP_MAX_RESENDS', '3'))
+OTP_TTL_SECONDS = int(os.getenv('OTP_TTL_SECONDS', '300'))
+OTP_MAX_RESENDS = int(os.getenv('OTP_MAX_RESENDS', '20'))
 RETURN_OTP_IN_DEBUG = os.getenv('RETURN_OTP_IN_DEBUG', 'True') == 'True'
+
+SMS_API_KEY = os.getenv('SMS_API_KEY', '')
+SMS_TEMPLATE_ID = int(os.getenv('SMS_TEMPLATE_ID', '123456'))
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True') == 'True'
