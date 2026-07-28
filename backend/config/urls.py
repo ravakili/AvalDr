@@ -1,0 +1,23 @@
+from django.contrib import admin
+from django.urls import path, include
+from django.conf import settings
+from django.conf.urls.static import static
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('api/v1/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/v1/schema/swagger/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger'),
+    path('api/v1/auth/', include('accounts.urls')),
+    path('api/v1/doctors/', include('doctors.urls')),
+    path('api/v1/appointments/', include('appointments.urls')),
+    path('api/v1/chat/', include('chat.urls')),
+    path('api/v1/prescriptions/', include('prescriptions.urls')),
+    path('api/v1/medical/', include('medical.urls')),
+    path('api/v1/notifications/', include('notifications.urls')),
+    path('api/v1/admin/', include('admin_panel.urls')),
+    path('api/v1/payments/', include('payments.urls')),
+]
+
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
