@@ -7,7 +7,7 @@ import StatCard from '../../components/ui/StatCard'
 import Modal from '../../components/ui/Modal'
 import { TextArea } from '../../components/ui/InputField'
 import { IconCheck, IconClose, IconWallet } from '../../components/ui/icons'
-import { doctors, withdrawalRequests as seed } from '../../data/mockData'
+import { doctors, withdrawalRequests as seed } from '../../data/apiData'
 import { formatToman, toFa } from '../../lib/utils'
 import type { WithdrawalRequest } from '../../types'
 

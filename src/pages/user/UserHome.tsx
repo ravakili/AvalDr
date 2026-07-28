@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useEffect, useMemo } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import GlassCard from '../../components/ui/GlassCard'
 import PrimaryButton from '../../components/ui/PrimaryButton'
@@ -13,73 +13,54 @@ import {
   IconChevron,
   IconClock,
   IconDownload,
+  IconFile,
   IconHeart,
-  IconPin,
   IconPlus,
   IconPrescription,
   IconSearch,
-  IconUpload,
   IconVideo,
 } from '../../components/ui/icons'
-import {
-  appointments,
-  doctors,
-  getDoctor,
-  prescriptions,
-} from '../../data/mockData'
 import { formatDateFa, relativeDay, shortDateFa, toFa } from '../../lib/utils'
-
-const ME = 'pat-1'
-
-const tips = [
-  {
-    icon: '💧',
-    title: 'روزانه ۸ لیوان آب',
-    desc: 'هیدراته نگه‌داشتن بدن به عملکرد بهتر قلب کمک می‌کند.',
-  },
-  {
-    icon: '🚶',
-    title: '۳۰ دقیقه پیاده‌روی',
-    desc: 'فعالیت سبک روزانه، فشار خون را تنظیم می‌کند.',
-  },
-  {
-    icon: '😴',
-    title: 'خواب کافی',
-    desc: '۷ تا ۸ ساعت خواب، رمز سلامت سیستم ایمنی است.',
-  },
-]
+import { useAuthStore } from '../../store/authStore'
+import { useUserStore } from '../../store/userStore'
+import { getDoctor } from '../../data/apiData'
+import type { Appointment } from '../../types'
 
 export default function UserHome() {
   const navigate = useNavigate()
-  const mine = appointments
-    .filter((a) => a.patientId === ME)
-    .sort((a, b) => a.date.localeCompare(b.date))
+  const user = useAuthStore((s) => s.user)
+  const profile = useUserStore((s) => s.profile)
+  const appointments = useUserStore((s) => s.appointments)
+  const notifications = useUserStore((s) => s.notifications)
+  const reports = useUserStore((s) => s.reports)
+  const healthTips = useUserStore((s) => s.healthTips)
+  const lastFetched = useUserStore((s) => s.lastFetched)
+  const fetchAll = useUserStore((s) => s.fetchAll)
+
+  useEffect(() => {
+    if (!lastFetched || Date.now() - lastFetched > 60000) fetchAll()
+  }, [])
+
+  const mine = useMemo(
+    () => appointments
+      .filter((a) => a.patientId === profile?.id)
+      .sort((a, b) => a.date.localeCompare(b.date) || a.time.localeCompare(b.time)),
+    [appointments, profile],
+  )
   const upcoming = mine.filter(
-    (a) => a.status === 'waiting' || a.status === 'in-progress',
+    (a) => a.status === 'waiting' || a.status === 'in-progress' || a.status === 'pending-payment' || a.status === 'pending-approval',
   )
   const completed = mine.filter((a) => a.status === 'completed').length
-  const myPrescriptions = prescriptions.filter((p) => p.patientId === ME)
+  const newMessages = notifications.filter((n) => !n.read).length
 
-  const nextAppt = upcoming[0]
+  const nextAppt: Appointment | undefined = upcoming[0]
   const nextTarget = nextAppt ? `${nextAppt.date}T${nextAppt.time}:00` : null
 
-  const [pendingReports, setPendingReports] = useState<{ name: string; saved: boolean }[]>([])
-  const reportInputRef = useRef<HTMLInputElement>(null)
-
-  const handleReportSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0]
-    if (!file) return
-    setPendingReports(prev => [...prev, { name: file.name, saved: false }])
-    e.target.value = ''
-  }
-
-  const saveReport = (idx: number) => {
-    setPendingReports(prev => prev.map((r, i) => i === idx ? { ...r, saved: true } : r))
-  }
+  const todayStr = new Date().toISOString().slice(0, 10)
+  const todayAppts = upcoming.filter((a) => a.date === todayStr)
 
   return (
     <div className="space-y-6">
-      {/* Stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <StatCard
           title="نوبت‌های آینده"
@@ -92,30 +73,29 @@ export default function UserHome() {
         <StatCard
           title="ویزیت‌های انجام‌شده"
           value={completed}
-          delta="در ۳۰ روز گذشته"
+          delta="کل ویزیت‌ها"
           trend="up"
           tone="blue"
           icon={<IconActivity />}
         />
         <StatCard
           title="پیام‌های جدید"
-          value={2}
+          value={newMessages}
           delta="از پزشکان"
-          trend="up"
+          trend={newMessages > 0 ? 'up' : 'flat'}
           tone="violet"
           icon={<IconChat />}
         />
         <StatCard
-          title="امتیاز سلامتی"
-          value="۸۲٪"
-          delta="روند رو به رشد"
-          trend="up"
+          title="گزارش‌های پزشکی"
+          value={reports.length}
+          delta="فایل ذخیره شده"
+          trend="flat"
           tone="rose"
-          icon={<IconHeart />}
+          icon={<IconFile />}
         />
       </div>
 
-      {/* Hero CTA */}
       <GlassCard className="relative overflow-hidden p-6 sm:p-8">
         <div className="pointer-events-none absolute -left-10 -top-10 h-40 w-40 rounded-full bg-primary-300/40 blur-3xl" />
         <div className="relative flex flex-col items-start justify-between gap-5 md:flex-row md:items-center">
@@ -146,7 +126,6 @@ export default function UserHome() {
         </div>
       </GlassCard>
 
-      {/* Next appointment with countdown */}
       {nextAppt && nextTarget && (
         <GlassCard variant="soft" className="flex flex-col items-start justify-between gap-4 p-5 sm:flex-row sm:items-center">
           <div className="flex items-center gap-4">
@@ -156,7 +135,7 @@ export default function UserHome() {
             <div>
               <p className="text-xs text-ink-400">شمارش معکوس تا نوبت بعدی</p>
               <p className="font-bold text-ink-800">
-                {getDoctor(nextAppt.doctorId)?.name} •{' '}
+                {getDoctor(nextAppt.doctorId)?.name || ''} •{' '}
                 <span className="tabular">{toFa(nextAppt.time)}</span>
               </p>
               <p className="text-xs text-ink-500">
@@ -172,7 +151,7 @@ export default function UserHome() {
               icon={
                 nextAppt.consultType === 'video' ? <IconVideo className="h-4 w-4" /> : <IconChat className="h-4 w-4" />
               }
-              onClick={() => navigate(`/doctor/consult/${nextAppt.id}`)}
+              onClick={() => navigate(`/user/consult/${nextAppt.id}`)}
             >
               شروع مشاوره
             </PrimaryButton>
@@ -180,8 +159,25 @@ export default function UserHome() {
         </GlassCard>
       )}
 
+      {todayAppts.length > 0 && (
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {todayAppts.slice(0, 4).map((a) => {
+            const doc = getDoctor(a.doctorId)
+            return (
+              <GlassCard key={a.id} hover className="flex items-center gap-3 p-4" onClick={() => navigate(`/user/consult/${a.id}`)}>
+                <Avatar src={doc?.avatar} size="md" ring />
+                <div className="min-w-0 flex-1">
+                  <p className="truncate font-semibold text-ink-800">{doc?.name || 'پزشک'}</p>
+                  <p className="text-xs text-ink-400">{a.reason}</p>
+                </div>
+                <StatusBadge status={a.status} />
+              </GlassCard>
+            )
+          })}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Upcoming appointments */}
         <GlassCard className="p-6 lg:col-span-2">
           <div className="mb-4 flex items-center justify-between">
             <div>
@@ -198,7 +194,7 @@ export default function UserHome() {
 
           <div className="space-y-3">
             {upcoming.slice(0, 3).map((a) => {
-              const doc = getDoctor(a.doctorId)!
+              const doc = getDoctor(a.doctorId)
               const rel = relativeDay(a.date)
               const target = `${a.date}T${a.time}:00`
               return (
@@ -206,14 +202,14 @@ export default function UserHome() {
                   key={a.id}
                   className="group flex flex-wrap items-center gap-4 rounded-2xl border border-white/50 bg-white/40 p-3 transition hover:bg-white/60"
                 >
-                  <Avatar src={doc.avatar} size="md" ring />
+                  <Avatar src={doc?.avatar} size="md" ring />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate font-semibold text-ink-800">{doc.name}</p>
+                      <p className="truncate font-semibold text-ink-800">{doc?.name || 'پزشک'}</p>
                       <StatusBadge status={a.status} />
                     </div>
                     <p className="truncate text-xs text-ink-400">
-                      {doc.hospital} • {a.reason}
+                      {doc?.hospital || ''} • {a.reason}
                     </p>
                   </div>
                   <div className="flex items-center gap-3">
@@ -236,49 +232,41 @@ export default function UserHome() {
           </div>
         </GlassCard>
 
-        {/* Messages */}
         <GlassCard className="p-6">
           <div className="mb-4 flex items-center justify-between">
             <h3 className="font-bold text-ink-800">پیام‌های اخیر</h3>
-            <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-600">
-              {toFa(2)} جدید
-            </span>
+            {newMessages > 0 && (
+              <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-600">
+                {toFa(newMessages)} جدید
+              </span>
+            )}
           </div>
           <div className="space-y-3">
-            {[
-              {
-                doc: doctors[0],
-                text: 'نسخه شما آماده شد. لطفاً داروها را طبق دستور مصرف کنید.',
-                time: '۱۰ دقیقه پیش',
-              },
-              {
-                doc: doctors[7],
-                text: 'جلسه مشاوره فردا ساعت ۱۵:۰۰ برگزار می‌شود.',
-                time: '۲ ساعت پیش',
-              },
-              {
-                doc: doctors[2],
-                text: 'نتیجه آزمایش شما طبیعی بود. نگران نباشید.',
-                time: 'دیروز',
-              },
-            ].map((m, i) => (
+            {notifications.slice(0, 5).map((n) => (
               <div
-                key={i}
+                key={n.id}
                 className="flex items-start gap-3 rounded-2xl border border-white/40 bg-white/40 p-3 transition hover:bg-white/60"
               >
-                <Avatar src={m.doc.avatar} size="sm" />
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink-800">{m.doc.name}</p>
-                  <p className="line-clamp-2 text-xs leading-5 text-ink-500">{m.text}</p>
-                  <p className="mt-1 text-[10px] text-ink-400">{m.time}</p>
+                <div className="grid h-8 w-8 shrink-0 place-items-center rounded-xl bg-primary-50 text-primary-500">
+                  <IconChat className="h-4 w-4" />
                 </div>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-ink-800">{n.title}</p>
+                  <p className="line-clamp-2 text-xs leading-5 text-ink-500">{n.body}</p>
+                  <p className="mt-1 text-[10px] text-ink-400">
+                    {relativeDay(n.createdAt.slice(0, 10)) || shortDateFa(n.createdAt)}
+                  </p>
+                </div>
+                {!n.read && <span className="h-2 w-2 shrink-0 rounded-full bg-red-500" />}
               </div>
             ))}
+            {notifications.length === 0 && (
+              <p className="py-6 text-center text-xs text-ink-400">پیامی وجود ندارد.</p>
+            )}
           </div>
         </GlassCard>
       </div>
 
-      {/* Prescriptions & reports */}
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <GlassCard className="p-6">
           <div className="mb-4 flex items-center justify-between">
@@ -286,106 +274,56 @@ export default function UserHome() {
               <IconPrescription className="h-5 w-5 text-primary-500" />
               <h3 className="font-bold text-ink-800">نسخه‌های اخیر</h3>
             </div>
-            <span className="rounded-full bg-primary-50 px-2 py-0.5 text-xs font-semibold text-primary-700">
-              {toFa(myPrescriptions.length)} نسخه
-            </span>
           </div>
           <div className="space-y-3">
-            {myPrescriptions.length ? (
-              myPrescriptions.map((rx) => (
-                <div
-                  key={rx.id}
-                  className="rounded-2xl border border-primary-200/60 bg-primary-50/50 p-4"
-                >
-                  <div className="flex items-center justify-between">
-                    <p className="text-sm font-semibold text-ink-800">
-                      نسخه {getDoctor(rx.doctorId)?.name}
-                    </p>
-                    <span className="text-xs text-ink-400">{shortDateFa(rx.createdAt)}</span>
-                  </div>
-                  <ul className="mt-2 space-y-1 text-xs text-ink-600">
-                    {rx.items.map((it, i) => (
-                      <li key={i} className="flex items-center gap-2">
-                        <span className="h-1 w-1 rounded-full bg-primary-400" />
-                        {it.drug} — <span className="text-ink-400">{it.usage}</span>
-                      </li>
-                    ))}
-                  </ul>
-                  <div className="mt-3 flex gap-2">
-                    <PrimaryButton size="sm" variant="ghost" icon={<IconDownload className="h-4 w-4" />}>
-                      دانلود
-                    </PrimaryButton>
-                  </div>
-                </div>
-              ))
-            ) : (
-              <p className="py-6 text-center text-sm text-ink-400">نسخه‌ای ثبت نشده است.</p>
-            )}
+            <p className="py-6 text-center text-sm text-ink-400">
+              برای مشاهده نسخه‌ها به صفحه نوبت‌ها مراجعه کنید.
+            </p>
           </div>
         </GlassCard>
 
-        {/* Medical reports */}
         <GlassCard className="p-6">
           <div className="mb-4 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <IconActivity className="h-5 w-5 text-primary-500" />
               <h3 className="font-bold text-ink-800">گزارش‌های پزشکی</h3>
             </div>
-            <input ref={reportInputRef} type="file" className="hidden" onChange={handleReportSelect} accept=".pdf,.jpg,.png,.doc,.docx" />
-            <PrimaryButton size="sm" variant="ghost" icon={<IconPlus className="h-4 w-4" />} onClick={() => reportInputRef.current?.click()}>
-              افزودن گزارش پزشکی
-            </PrimaryButton>
+            <Link to="/user/profile">
+              <PrimaryButton size="sm" variant="ghost" icon={<IconPlus className="h-4 w-4" />}>
+                مدیریت گزارش‌ها
+              </PrimaryButton>
+            </Link>
           </div>
           <div className="space-y-3">
-            {[
-              { name: 'آزمایش خون کامل', doc: 'آزمایشگاه پارسیان', date: '۱۴۰۳/۰۹/۱۰', type: 'PDF' },
-              { name: 'نوار قلب (ECG)', doc: 'بیمارستان دی', date: '۱۴۰۳/۰۹/۰۵', type: 'JPG' },
-              { name: 'سونوگرافی قلب', doc: 'مرکز تصویربرداری نور', date: '۱۴۰۳/۰۸/۲۸', type: 'PDF' },
-            ].map((r, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-3 rounded-2xl border border-white/50 bg-white/40 p-3 transition hover:bg-white/60"
-              >
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/70 text-xs font-bold text-primary-600">
-                  {r.type}
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink-800">{r.name}</p>
-                  <p className="truncate text-xs text-ink-400">
-                    {r.doc} • <span className="tabular">{r.date}</span>
-                  </p>
-                </div>
-                <button className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 transition hover:bg-primary-50 hover:text-primary-600">
-                  <IconDownload className="h-4 w-4" />
-                </button>
-              </div>
-            ))}
-            {pendingReports.map((r, idx) => (
-              <div
-                key={idx}
-                className="flex items-center gap-3 rounded-2xl border border-dashed border-primary-300/60 bg-primary-50/40 p-3 transition"
-              >
-                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/70 text-primary-600">
-                  <IconUpload className="h-5 w-5" />
-                </div>
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-semibold text-ink-800">{r.name}</p>
-                  <p className="text-xs text-ink-400">آماده ذخیره</p>
-                </div>
-                <PrimaryButton
-                  size="sm"
-                  disabled={r.saved}
-                  onClick={() => saveReport(idx)}
+            {reports.length > 0 ? (
+              reports.slice(0, 5).map((r) => (
+                <div
+                  key={r.id}
+                  className="flex items-center gap-3 rounded-2xl border border-white/50 bg-white/40 p-3 transition hover:bg-white/60"
                 >
-                  {r.saved ? 'ذخیره شد' : 'ذخیره'}
-                </PrimaryButton>
-              </div>
-            ))}
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-white/70 text-xs font-bold text-primary-600">
+                    {r.type?.toUpperCase() || 'PDF'}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-ink-800">{r.name}</p>
+                    <p className="truncate text-xs text-ink-400">
+                      <span className="tabular">{shortDateFa(r.uploadedAt)}</span>
+                    </p>
+                  </div>
+                  {r.url && (
+                    <a href={r.url} target="_blank" rel="noopener noreferrer" className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 transition hover:bg-primary-50 hover:text-primary-600">
+                      <IconDownload className="h-4 w-4" />
+                    </a>
+                  )}
+                </div>
+              ))
+            ) : (
+              <p className="py-4 text-center text-xs text-ink-400">گزارشی ثبت نشده است.</p>
+            )}
           </div>
         </GlassCard>
       </div>
 
-      {/* Health tips */}
       <div>
         <div className="mb-3 flex items-center justify-between">
           <div>
@@ -394,15 +332,15 @@ export default function UserHome() {
           </div>
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-          {tips.map((t) => (
-            <GlassCard key={t.title} variant="soft" hover className="p-5">
+          {healthTips.map((t) => (
+            <GlassCard key={t.id} variant="soft" hover className="p-5">
               <div className="flex items-center gap-3">
                 <div className="grid h-12 w-12 place-items-center rounded-2xl bg-white/70 text-2xl">
-                  {t.icon}
+                  {t.icon || '💡'}
                 </div>
                 <div>
                   <p className="font-bold text-ink-800">{t.title}</p>
-                  <p className="mt-0.5 text-xs leading-5 text-ink-500">{t.desc}</p>
+                  <p className="mt-0.5 text-xs leading-5 text-ink-500">{t.text}</p>
                 </div>
               </div>
             </GlassCard>

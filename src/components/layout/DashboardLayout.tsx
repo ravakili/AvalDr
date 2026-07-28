@@ -4,11 +4,29 @@ import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import MobileBottomNav from "./MobileBottomNav";
 import type { Role } from "../../types";
+import { useBackendData } from "../../data/apiData";
+import { useAuthStore } from "../../store/authStore";
+
+const greetings: Record<Role, string> = {
+  user: "سلام",
+  doctor: "سلام",
+  admin: "سلام",
+};
+
+const subtitles: Record<Role, string> = {
+  user: "امروز چه کمکی از ما ساخته است؟",
+  doctor: "برنامه امروز شما آماده است",
+  admin: "نمای کلی سیستم اول دکتر",
+};
 
 const titles: Record<string, { title: string; subtitle?: string }> = {
   "/user": {
-    title: "سلام، محمد 👋",
+    title: "داشبورد",
     subtitle: "امروز چه کمکی از ما ساخته است؟",
+  },
+  "/doctor": {
+    title: "داشبورد",
+    subtitle: "برنامه امروز شما آماده است",
   },
   "/user/doctors": {
     title: "جستجوی پزشک",
@@ -23,10 +41,7 @@ const titles: Record<string, { title: string; subtitle?: string }> = {
     subtitle: "مدیریت نوبت‌های قبلی و آینده",
   },
   "/user/profile": { title: "پروفایل", subtitle: "اطلاعات حساب کاربری و پرونده" },
-  "/doctor": {
-    title: "سلام، دکتر سارا 👋",
-    subtitle: "برنامه امروز شما آماده است",
-  },
+  "/user/consult": { title: "اتاق مشاوره", subtitle: "گفتگو با پزشک" },
   "/doctor/appointments": {
     title: "نوبت‌ها",
     subtitle: "لیست بیماران و زمان نوبت‌ها",
@@ -43,7 +58,7 @@ const titles: Record<string, { title: string; subtitle?: string }> = {
     title: "پروفایل حرفه‌ای",
     subtitle: "تنظیمات کاری و تخصص",
   },
-  "/admin": { title: "داشبورد مدیریت", subtitle: "نمای کلی سیستم دکتر سینا" },
+  "/admin": { title: "داشبورد مدیریت", subtitle: "نمای کلی سیستم اول‌دکتر" },
   "/admin/doctors": {
     title: "مدیریت پزشکان",
     subtitle: "تأیید، تعلیق و مدیریت پزشکان",
@@ -60,6 +75,8 @@ interface Props {
 }
 
 export default function DashboardLayout({ role }: Props) {
+  useBackendData(role);
+  const user = useAuthStore((s) => s.user);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { pathname } = useLocation();
 
@@ -70,6 +87,10 @@ export default function DashboardLayout({ role }: Props) {
       .sort((a, b) => b.length - a.length)[0] || `/${role}`;
 
   const meta = titles[key] || titles[`/${role}`];
+  const title = key === `/${role}`
+    ? `${greetings[role]}${user?.name ? `، ${user.name}` : ''} 👋`
+    : meta.title;
+  const subtitle = key === `/${role}` ? meta.subtitle || subtitles[role] : meta.subtitle;
 
   return (
     <div className="flex min-h-screen gap-5 p-4 lg:p-6">
@@ -95,8 +116,8 @@ export default function DashboardLayout({ role }: Props) {
       <main className="flex min-w-0 flex-1 flex-col">
         <Topbar
           role={role}
-          title={meta.title}
-          subtitle={meta.subtitle}
+          title={title}
+          subtitle={subtitle}
           onMenu={() => setMobileOpen(true)}
         />
         <div className="flex-1 animate-fade-in pb-20 lg:pb-0 ">

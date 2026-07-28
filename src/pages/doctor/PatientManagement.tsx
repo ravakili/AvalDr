@@ -1,5 +1,9 @@
 import { useMemo, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import DatePicker from 'react-multi-date-picker'
+import persian from 'react-date-object/calendars/persian'
+import persian_fa from 'react-date-object/locales/persian_fa'
+import type { Value } from 'react-multi-date-picker'
 import GlassCard from '../../components/ui/GlassCard'
 import Avatar from '../../components/ui/Avatar'
 import Badge from '../../components/ui/Badge'
@@ -8,18 +12,32 @@ import InputField from '../../components/ui/InputField'
 import EmptyState from '../../components/ui/EmptyState'
 import Modal from '../../components/ui/Modal'
 import { IconChevronDown, IconChevronUp, IconChat, IconFile, IconCalendar, IconSearch, IconUsers, IconClock, IconPlus } from '../../components/ui/icons'
-import { appointments, doctors, getDoctor, getPatient, patients } from '../../data/mockData'
+import { appointments, doctors, getPatient, patients } from '../../data/apiData'
 import { cn, formatDateFa, toFa } from '../../lib/utils'
-
-const ME = 'doc-1'
+import { useAuthStore } from '../../store/authStore'
+import { api } from '../../lib/api'
+import { refreshBackendData } from '../../data/apiData'
 const daysOfWeek = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه']
+
+function toGregorian(year: number, month: number, day: number): string {
+  // Simple Persian-to-Gregorian conversion
+  const persianEpoch = 226899;
+  const totalDays = (year - 1) * 365 + Math.floor((year - 1) / 4) + persianEpoch + (month > 7 ? (month - 1) * 30 + 6 : (month - 1) * 31) + day;
+  const gYear = Math.floor((totalDays - 1) / 365);
+  const remaining = (totalDays - 1) % 365;
+  const gMonth = remaining < 31 ? 3 : remaining < 59 ? 4 : remaining < 90 ? 5 : remaining < 120 ? 6 : remaining < 151 ? 7 : remaining < 181 ? 8 : remaining < 212 ? 9 : remaining < 243 ? 10 : remaining < 273 ? 11 : remaining < 304 ? 12 : remaining < 334 ? 1 : remaining < 365 ? 2 : 0;
+  const gDay = remaining - (gMonth > 2 ? (gMonth <= 7 ? (gMonth - 3) * 31 + 30 : (gMonth - 8) * 30 + 31 * 5 - 2) : gMonth === 3 ? 30 : 0) + 1;
+  return `${gYear}-${String(gMonth).padStart(2, '0')}-${String(gDay).padStart(2, '0')}`;
+}
 
 export default function PatientManagement() {
   const navigate = useNavigate()
+  const ME = useAuthStore((state) => state.user?.refId || '')
   const [search, setSearch] = useState('')
   const [expandedId, setExpandedId] = useState<string | null>(null)
   const [followUpId, setFollowUpId] = useState<string | null>(null)
-  const [fuDate, setFuDate] = useState('')
+  const [fuDate, setFuDate] = useState<Date | null>(null)
+  const [fuDateStr, setFuDateStr] = useState('')
   const [fuTime, setFuTime] = useState('')
   const [fuNote, setFuNote] = useState('')
 
@@ -31,15 +49,15 @@ export default function PatientManagement() {
     ? myPatients.filter((p) => p.name.includes(search.trim()) || p.city.includes(search.trim()))
     : myPatients
 
+  const followUpPatient = followUpId ? getPatient(followUpId) : null
+
   const me = doctors.find((d) => d.id === ME)
   // Generate available time slots for the selected date based on doctor's working hours
   const availableSlots = useMemo(() => {
-    if (!fuDate || !me) return []
-    const dayName = daysOfWeek[new Date(fuDate).getDay()]
-    // Adjust for Persian week: Saturday = index 0
+    if (!fuDateStr || !me) return []
     const persianDays = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه']
-    const dateDayIndex = new Date(fuDate).getDay() // 0=Sun, 1=Mon, ...
-    const persianIndex = dateDayIndex === 6 ? 0 : dateDayIndex + 1 // convert to Persian index
+    const dateDayIndex = new Date(fuDateStr).getDay()
+    const persianIndex = dateDayIndex === 6 ? 0 : dateDayIndex + 1
     const persianDay = persianDays[persianIndex]
     const daySlots = me.workingHours.filter((h) => h.day === persianDay)
     if (!daySlots.length) return []
@@ -54,12 +72,11 @@ export default function PatientManagement() {
         if (m >= 60) { h++; m = 0 }
       }
     }
-    // Remove already-booked times
     const booked = appointments
-      .filter((a) => a.doctorId === ME && a.date === fuDate)
+      .filter((a) => a.doctorId === ME && a.date === fuDateStr)
       .map((a) => a.time)
     return slots.filter((s) => !booked.includes(s))
-  }, [fuDate, me])
+  }, [fuDateStr, me])
 
   return (
     <div className="space-y-5">
@@ -179,9 +196,14 @@ export default function PatientManagement() {
                           <div key={a.id} className="flex items-center justify-between rounded-lg bg-white/40 px-3 py-1.5 text-xs">
                             <span className="text-ink-600">{formatDateFa(a.date)} — {toFa(a.time)}</span>
                             <span className="text-ink-400">{a.reason}</span>
-                            <Badge tone={a.status === 'completed' ? 'green' : a.status === 'cancelled' ? 'red' : 'amber'}>
-                              {a.status === 'completed' ? 'تکمیل' : a.status === 'cancelled' ? 'لغو' : 'فعال'}
-                            </Badge>
+                            <div className="flex items-center gap-2">
+                              <Badge tone={a.status === 'completed' ? 'green' : a.status === 'cancelled' ? 'red' : 'amber'}>
+                                {a.status === 'completed' ? 'تکمیل' : a.status === 'cancelled' ? 'لغو' : 'فعال'}
+                              </Badge>
+                              {a.paymentStatus && (
+                                <span className="text-[10px] text-ink-400">{a.paymentStatus === 'paid' ? 'پرداخت شده' : 'پرداخت نشده'}</span>
+                              )}
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -205,7 +227,8 @@ export default function PatientManagement() {
                         icon={<IconCalendar className="h-4 w-4" />}
                         onClick={() => {
                           setFollowUpId(p.id)
-                          setFuDate('')
+                          setFuDate(null)
+                          setFuDateStr('')
                           setFuTime('')
                           setFuNote('')
                         }}
@@ -236,21 +259,19 @@ export default function PatientManagement() {
           <>
             <PrimaryButton
               icon={<IconCalendar />}
-              disabled={!fuDate || !fuTime}
-              onClick={() => {
-                if (!followUpId || !fuDate || !fuTime) return
-                // Register appointment with pending-payment status
-                const newAppt = {
-                  id: `appt-${Date.now()}`,
+              disabled={!fuDateStr || !fuTime}
+              onClick={async () => {
+                if (!followUpId || !fuDateStr || !fuTime) return
+                await api.post('/appointments/', {
                   patientId: followUpId,
                   doctorId: ME,
-                  date: fuDate,
+                  date: fuDateStr,
                   time: fuTime,
-                  status: 'pending-payment' as const,
                   reason: fuNote || 'نوبت پیگیری',
-                  createdAt: new Date().toISOString(),
-                }
-                appointments.push(newAppt as any)
+                  consultType: 'video',
+                  paymentStatus: 'pending',
+                })
+                await refreshBackendData('doctor')
                 setFollowUpId(null)
               }}
             >
@@ -260,18 +281,43 @@ export default function PatientManagement() {
           </>
         }
       >
+        {followUpPatient && (
+          <div className="mb-4 rounded-xl bg-primary-50/60 p-3 text-sm">
+            <div className="flex items-center gap-3">
+              <Avatar src={followUpPatient.avatar} size="sm" />
+              <div>
+                <p className="font-medium text-ink-800">{followUpPatient.name}</p>
+                <p className="text-xs text-ink-500">کد: {followUpPatient.id}</p>
+              </div>
+            </div>
+          </div>
+        )}
         <p className="mb-4 text-sm text-ink-500">
           تاریخ و ساعت پیگیری را از روی ساعات کاری خود انتخاب کنید.
         </p>
         <div className="space-y-4">
-          <InputField
-            label="تاریخ"
-            type="date"
-            name="fudate"
-            value={fuDate}
-            onChange={(e) => { setFuDate(e.target.value); setFuTime('') }}
-          />
-          {fuDate && (
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-ink-700">تاریخ (شمسی)</label>
+            <DatePicker
+              value={fuDate}
+              onChange={(value: Value) => {
+                if (value && typeof value === 'object' && 'toDate' in value) {
+                  const d = (value as { toDate: () => Date }).toDate()
+                  setFuDate(d)
+                  setFuDateStr(d.toISOString().split('T')[0])
+                  setFuTime('')
+                }
+              }}
+              calendar={persian}
+              locale={persian_fa}
+              calendarPosition="bottom-right"
+              inputClass="glass-input w-full rounded-xl px-4 py-2.5 text-sm text-ink-800 outline-none focus:ring-2 focus:ring-primary-200"
+              containerClassName="w-full"
+              format="YYYY/MM/DD"
+              placeholder="انتخاب تاریخ"
+            />
+          </div>
+          {fuDateStr && (
             <div>
               <p className="mb-2 text-sm font-medium text-ink-700">ساعت‌های در دسترس</p>
               {availableSlots.length > 0 ? (

@@ -8,8 +8,8 @@ export default defineConfig({
             registerType: 'autoUpdate',
             includeAssets: ['favicon.svg'],
             manifest: {
-                name: 'دکتر ساینا - مشاوره پزشکی آنلاین',
-                short_name: 'دکتر ساینا',
+                name: 'اول دکتر - مشاوره پزشکی آنلاین',
+                short_name: 'اول دکتر',
                 description: 'مشاوره آنلاین با بهترین پزشکان ایران',
                 theme_color: '#2196b3',
                 background_color: '#eef4f9',
@@ -24,6 +24,7 @@ export default defineConfig({
             },
             workbox: {
                 globPatterns: ['**/*.{js,css,html,ico,svg,png,jpg}'],
+                maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
             },
         }),
     ],

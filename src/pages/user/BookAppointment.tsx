@@ -6,7 +6,8 @@ import Avatar from '../../components/ui/Avatar'
 import Badge from '../../components/ui/Badge'
 import { TextArea } from '../../components/ui/InputField'
 import { cn, formatToman, toFa } from '../../lib/utils'
-import { doctors, getDoctor, getSpecialty, appointments } from '../../data/mockData'
+import { getDoctor, getSpecialty, refreshBackendData } from '../../data/apiData'
+import { api } from '../../lib/api'
 import {
   IconCalendar,
   IconChat,
@@ -20,6 +21,7 @@ import {
   IconWallet,
 } from '../../components/ui/icons'
 import { useAuthStore } from '../../store/authStore'
+import { useUserStore } from '../../store/userStore'
 import type { ConsultType, Appointment } from '../../types'
 
 const today = new Date()
@@ -36,18 +38,26 @@ const dayLabel = (iso: string, idx: number) => {
   return { wd, dm, isToday: idx === 0 }
 }
 
-const slots = ['09:00', '10:30', '12:00', '14:30', '16:00', '17:30', '19:00']
+const nowTimeStr = () => {
+  const d = new Date()
+  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
+}
+
+const fallbackSlots = ['09:00', '10:30', '12:00', '14:30', '16:00', '17:30', '19:00']
 
 export default function BookAppointment() {
   const { doctorId } = useParams()
   const navigate = useNavigate()
   const doctor = doctorId ? getDoctor(doctorId) : undefined
   const user = useAuthStore((s) => s.user)
+  const updateAppt = useUserStore((s) => s.updateAppointment)
+  const deleteAppt = useUserStore((s) => s.deleteAppointment)
 
   const [day, setDay] = useState(nextDays[0])
   const [time, setTime] = useState('')
   const [reason, setReason] = useState('')
   const [consultType, setConsultType] = useState<ConsultType>('video')
+  const [rawSlots, setRawSlots] = useState<{ time: string; available: boolean }[]>([])
 
   const [showPayment, setShowPayment] = useState(false)
   const [paymentStep, setPaymentStep] = useState<'form' | 'processing' | 'success' | 'failed'>('form')
@@ -56,10 +66,37 @@ export default function BookAppointment() {
   const [cardCvv, setCardCvv] = useState('')
 
   const pendingApptRef = useRef<Appointment | null>(null)
+  const paymentIdRef = useRef<string | null>(null)
   const cancelTimerRef = useRef<ReturnType<typeof setTimeout>>()
   const [timeLeft, setTimeLeft] = useState(300)
 
+  const isToday = day === nextDays[0]
+  const currentTime = nowTimeStr()
+
   const dayCards = useMemo(() => nextDays.map((iso, i) => ({ iso, ...dayLabel(iso, i) })), [])
+
+  const slots = useMemo(() => {
+    return rawSlots
+      .filter((s) => s.available)
+      .filter((s) => !isToday || s.time >= currentTime)
+      .map((s) => s.time)
+  }, [rawSlots, isToday, currentTime])
+
+  useEffect(() => {
+    if (!doctor) return
+    api
+      .get<{ slots: { time: string; available: boolean }[] }>(
+        `/doctors/${doctor.id}/slots/?date=${day}`,
+        false,
+      )
+      .then((response) => {
+        setRawSlots(response.slots)
+        setTime((current) => (response.slots.some((s) => s.time === current && s.available) ? current : ''))
+      })
+      .catch(() => {
+        setRawSlots(fallbackSlots.map((t) => ({ time: t, available: true })))
+      })
+  }, [doctor, day])
 
   // Auto-cancel timer
   const startCancelTimer = useCallback(() => {
@@ -75,7 +112,8 @@ export default function BookAppointment() {
     }, 1000)
     cancelTimerRef.current = setTimeout(() => {
       if (pendingApptRef.current) {
-        pendingApptRef.current.status = 'cancelled'
+        api.delete(`/appointments/${pendingApptRef.current.id}/`).catch(() => {})
+        pendingApptRef.current = null
       }
       setShowPayment(false)
       setPaymentStep('form')
@@ -108,43 +146,67 @@ export default function BookAppointment() {
 
   const specialty = getSpecialty(doctor.specialtyId)
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!time || !user) return
-    const appt: Appointment = {
-      id: `appt-${Date.now()}`,
-      patientId: user.refId || 'pat-1',
-      doctorId: doctor.id,
-      date: day,
-      time,
-      status: 'pending-payment',
-      reason,
-      consultType,
-      createdAt: new Date().toISOString(),
+    try {
+      const appt = await api.post<Appointment>('/appointments/', {
+        doctorId: doctor.id,
+        date: day,
+        time,
+        reason,
+        consultType,
+      })
+      const payment = await api.post<{ id: string }>(`/appointments/${appt.id}/payment/`)
+      pendingApptRef.current = appt
+      paymentIdRef.current = payment.id
+      setShowPayment(true)
+      setPaymentStep('form')
+      startCancelTimer()
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'ثبت نوبت انجام نشد')
     }
-    appointments.push(appt)
-    pendingApptRef.current = appt
-    setShowPayment(true)
-    setPaymentStep('form')
-    startCancelTimer()
   }
 
-  const simulatePayment = () => {
+  const submitPayment = async () => {
+    if (!paymentIdRef.current) return
     setPaymentStep('processing')
-    setTimeout(() => {
-      const success = Math.random() > 0.15
+    const success = Math.random() > 0.15
+    try {
+      await api.post(`/payments/${paymentIdRef.current}/verify/`, {
+        success,
+        cardNumber,
+        cardMonth,
+        cardCvv,
+      })
       if (success && pendingApptRef.current) {
-        pendingApptRef.current.status = 'waiting'
+        updateAppt(pendingApptRef.current.id, { status: 'waiting' })
         setPaymentStep('success')
         clearTimeout(cancelTimerRef.current)
       } else {
-        if (pendingApptRef.current) pendingApptRef.current.status = 'cancelled'
+        if (pendingApptRef.current) {
+          updateAppt(pendingApptRef.current.id, { status: 'cancelled' })
+        }
         setPaymentStep('failed')
         clearTimeout(cancelTimerRef.current)
       }
-    }, 2000)
+      await refreshBackendData('user')
+    } catch {
+      if (pendingApptRef.current) {
+        updateAppt(pendingApptRef.current.id, { status: 'cancelled' })
+      }
+      setPaymentStep('failed')
+      clearTimeout(cancelTimerRef.current)
+    }
   }
 
-  const closePayment = () => {
+  const closePayment = async () => {
+    // Cancel payment - delete the appointment from DB
+    if (pendingApptRef.current && paymentStep !== 'success') {
+      try {
+        await api.delete(`/appointments/${pendingApptRef.current.id}/`)
+        if (pendingApptRef.current) deleteAppt(pendingApptRef.current.id)
+      } catch { /* ignore */ }
+    }
     setShowPayment(false)
     setPaymentStep('form')
     setCardNumber('')
@@ -166,7 +228,6 @@ export default function BookAppointment() {
 
   return (
     <div className="space-y-6">
-      {/* Doctor summary */}
       <GlassCard className="p-5">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start">
           <Avatar src={doctor.avatar} size="xl" ring />
@@ -201,7 +262,6 @@ export default function BookAppointment() {
           </div>
         </div>
 
-        {/* Working hours */}
         {doctor.workingHours.length > 0 && (
           <div className="mt-4 border-t border-white/50 pt-4">
             <p className="mb-2 text-sm font-medium text-ink-700">روزها و ساعات در دسترس</p>
@@ -219,7 +279,6 @@ export default function BookAppointment() {
       </GlassCard>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
-        {/* Day picker */}
         <GlassCard className="p-6 lg:col-span-2">
           <h3 className="mb-1 font-bold text-ink-800">انتخاب روز</h3>
           <p className="mb-4 text-xs text-ink-400">هفت روز آینده</p>
@@ -229,7 +288,7 @@ export default function BookAppointment() {
               return (
                 <button
                   key={d.iso}
-                  onClick={() => setDay(d.iso)}
+                  onClick={() => { setDay(d.iso); setTime('') }}
                   className={`flex flex-col items-center gap-1 rounded-2xl border p-3 transition-all ${
                     active
                       ? 'border-primary-400 bg-primary-500 text-white shadow-glass-sm'
@@ -248,11 +307,10 @@ export default function BookAppointment() {
             })}
           </div>
 
-          {/* Time slots */}
           <h3 className="mb-1 mt-6 font-bold text-ink-800">انتخاب ساعت</h3>
           <p className="mb-4 text-xs text-ink-400">ساعات خالی</p>
           <div className="grid grid-cols-3 gap-3 sm:grid-cols-4">
-            {slots.map((s) => {
+            {slots.length > 0 ? slots.map((s) => {
               const active = s === time
               return (
                 <button
@@ -267,10 +325,11 @@ export default function BookAppointment() {
                   {toFa(s)}
                 </button>
               )
-            })}
+            }) : (
+              <p className="col-span-full py-4 text-center text-sm text-ink-400">هیچ ساعتی در این روز خالی نیست.</p>
+            )}
           </div>
 
-          {/* Reason */}
           <div className="mt-6">
             <TextArea
               label="شرح حال (اختیاری)"
@@ -282,7 +341,6 @@ export default function BookAppointment() {
             />
           </div>
 
-          {/* Consultation type */}
           <div className="mt-6">
             <p className="mb-1.5 block text-sm font-medium text-ink-700">نوع مشاوره</p>
             <div className="grid grid-cols-3 gap-3">
@@ -312,7 +370,6 @@ export default function BookAppointment() {
           </div>
         </GlassCard>
 
-        {/* Summary */}
         <GlassCard variant="soft" className="h-fit p-6">
           <h3 className="font-bold text-ink-800">خلاصه نوبت</h3>
           <dl className="mt-4 space-y-3 text-sm">
@@ -344,7 +401,6 @@ export default function BookAppointment() {
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-ink-900/40 backdrop-blur-sm animate-fade-in" onClick={closePayment} />
           <GlassCard variant="default" className="relative z-10 w-full max-w-sm animate-pop-in p-6">
-            {/* Timer */}
             {paymentStep === 'form' && (
               <div className="mb-4 text-center">
                 <span className="text-xs text-ink-400">زمان باقی‌مانده برای پرداخت: </span>
@@ -354,7 +410,6 @@ export default function BookAppointment() {
               </div>
             )}
 
-            {/* Step: Form */}
             {paymentStep === 'form' && (
               <div className="space-y-4">
                 <div className="text-center">
@@ -405,7 +460,7 @@ export default function BookAppointment() {
                 </div>
 
                 <button
-                  onClick={simulatePayment}
+                  onClick={submitPayment}
                   disabled={cardNumber.length < 16}
                   className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-500 py-3 text-sm font-bold text-white shadow-glass-sm transition hover:bg-primary-600 active:scale-[.98] disabled:bg-ink-300 disabled:cursor-not-allowed"
                 >
@@ -416,7 +471,6 @@ export default function BookAppointment() {
               </div>
             )}
 
-            {/* Step: Processing */}
             {paymentStep === 'processing' && (
               <div className="flex flex-col items-center gap-4 py-6 text-center">
                 <svg className="h-12 w-12 animate-spin text-primary-500" viewBox="0 0 24 24" fill="none">
@@ -427,7 +481,6 @@ export default function BookAppointment() {
               </div>
             )}
 
-            {/* Step: Success */}
             {paymentStep === 'success' && (
               <div className="flex flex-col items-center gap-3 py-4 text-center">
                 <div className="grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-emerald-600">
@@ -444,7 +497,6 @@ export default function BookAppointment() {
               </div>
             )}
 
-            {/* Step: Failed */}
             {paymentStep === 'failed' && (
               <div className="flex flex-col items-center gap-3 py-4 text-center">
                 <div className="grid h-16 w-16 place-items-center rounded-full bg-red-100 text-red-500">
@@ -453,7 +505,7 @@ export default function BookAppointment() {
                 <h3 className="text-lg font-bold text-ink-800">پرداخت ناموفق</h3>
                 <p className="text-sm text-ink-500">متأسفانه تراکنش با خطا مواجه شد. لطفاً مجدداً تلاش کنید.</p>
                 <div className="mt-2 flex w-full flex-col gap-2">
-                  <PrimaryButton className="w-full" onClick={() => setPaymentStep('form')}>
+                  <PrimaryButton className="w-full" onClick={submitPayment}>
                     تلاش مجدد
                   </PrimaryButton>
                   <PrimaryButton variant="ghost" className="w-full" onClick={closePayment}>

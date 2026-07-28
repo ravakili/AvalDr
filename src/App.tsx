@@ -21,10 +21,13 @@ import BookAppointment from "./pages/user/BookAppointment";
 import MyAppointments from "./pages/user/MyAppointments";
 import UserProfile from "./pages/user/UserProfile";
 
+// Chat pages
+import ChatPage from "./pages/chat/ChatPage";
+import ChatInbox from "./pages/chat/ChatInbox";
+
 // Doctor pages
 import DoctorOverview from "./pages/doctor/DoctorOverview";
 import DoctorAppointments from "./pages/doctor/DoctorAppointments";
-import Consultation from "./pages/doctor/Consultation";
 import PatientManagement from "./pages/doctor/PatientManagement";
 import DoctorProfile from "./pages/doctor/DoctorProfile";
 
@@ -92,6 +95,8 @@ export default function App() {
         <Route path="doctors" element={<FindDoctors />} />
         <Route path="book/:doctorId" element={<BookAppointment />} />
         <Route path="appointments" element={<MyAppointments />} />
+        <Route path="consult" element={<ChatInbox />} />
+        <Route path="consult/:appointmentId" element={<ChatPage />} />
         <Route path="profile" element={<UserProfile />} />
       </Route>
 
@@ -106,7 +111,8 @@ export default function App() {
       >
         <Route index element={<DoctorOverview />} />
         <Route path="appointments" element={<DoctorAppointments />} />
-        <Route path="consult/:appointmentId" element={<Consultation />} />
+        <Route path="consult" element={<ChatInbox />} />
+        <Route path="consult/:appointmentId" element={<ChatPage />} />
         <Route path="patients" element={<PatientManagement />} />
         <Route path="profile" element={<DoctorProfile />} />
       </Route>
@@ -127,6 +133,8 @@ export default function App() {
         <Route path="logs" element={<AppointmentLogs />} />
         <Route path="withdrawals" element={<WithdrawalRequests />} />
         <Route path="settings" element={<SystemSettings />} />
+        <Route path="consult" element={<ChatInbox />} />
+        <Route path="consult/:appointmentId" element={<ChatPage />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />

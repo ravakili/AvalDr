@@ -18,10 +18,9 @@ import {
   IconFile,
   IconList,
 } from '../../components/ui/icons'
-import { appointments, getPatient, prescriptions } from '../../data/mockData'
+import { appointments, getPatient, prescriptions } from '../../data/apiData'
 import type { AppointmentStatus } from '../../types'
-
-const ME = 'doc-1'
+import { useAuthStore } from '../../store/authStore'
 
 const filterOptions: { key: AppointmentStatus | 'all'; label: string }[] = [
   { key: 'all', label: 'همه' },
@@ -33,6 +32,7 @@ const filterOptions: { key: AppointmentStatus | 'all'; label: string }[] = [
 
 export default function DoctorAppointments() {
   const navigate = useNavigate()
+  const ME = useAuthStore((state) => state.user?.refId || '')
   const [status, setStatus] = useState<AppointmentStatus | 'all'>('all')
   const [view, setView] = useState<'list' | 'calendar'>('list')
   const [expanded, setExpanded] = useState<string | null>(null)
@@ -98,7 +98,8 @@ export default function DoctorAppointments() {
           /* ===== LIST VIEW ===== */
           <div className="space-y-3">
             {mine.map((a) => {
-              const pat = getPatient(a.patientId)!
+              const pat = getPatient(a.patientId)
+              if (!pat) return null
               const isExpanded = expanded === a.id
               return (
                 <GlassCard key={a.id} hover className="p-0 overflow-hidden">
@@ -213,7 +214,8 @@ export default function DoctorAppointments() {
                 </h3>
                 <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-3">
                   {appts.map((a) => {
-                    const pat = getPatient(a.patientId)!
+                    const pat = getPatient(a.patientId)
+                    if (!pat) return null
                     return (
                       <GlassCard key={a.id} hover className="flex items-center gap-3 p-3">
                         <Avatar src={pat.avatar} size="sm" />

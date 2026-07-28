@@ -4,7 +4,7 @@ import InputField, { SelectField } from '../../components/ui/InputField'
 import GlassCard from '../../components/ui/GlassCard'
 import EmptyState from '../../components/ui/EmptyState'
 import { IconSearch, IconStethoscope } from '../../components/ui/icons'
-import { doctors, specialties } from '../../data/mockData'
+import { doctors, specialties } from '../../data/apiData'
 import { toFa } from '../../lib/utils'
 
 const cities = Array.from(new Set(doctors.map((d) => d.city)))

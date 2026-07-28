@@ -36,7 +36,7 @@ export const specialties: Specialty[] = [
 
 // ===== Doctors =====
 const avatar = (seed: string) =>
-  `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&radius=20&backgroundColor=b6e3f4,c0aede,d1f4e0`
+  `https://i.pravatar.cc/300?u=${seed}`
 
 export const doctors: Doctor[] = [
   {

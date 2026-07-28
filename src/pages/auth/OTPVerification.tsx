@@ -82,9 +82,7 @@ export default function OTPVerification() {
     incrementResend();
     setCode("");
     setError("");
-    const newCode = Math.floor(100000 + Math.random() * 900000).toString();
-    useAuthStore.setState({ otpCode: newCode });
-    console.info("[AvalDr Mock OTP]", `کد جدید برای ${phone}: ${newCode}`);
+    await sendOTP(phone);
   };
 
   const handleBack = () => {

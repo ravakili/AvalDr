@@ -33,7 +33,7 @@ import {
   patients,
   revenueData,
   userGrowthData,
-} from '../../data/mockData'
+} from '../../data/apiData'
 import { useNavigate } from 'react-router-dom'
 import { formatDateFa, toFa } from '../../lib/utils'
 
@@ -198,17 +198,17 @@ export default function AdminOverview() {
               </thead>
               <tbody className="divide-y divide-white/40">
                 {recent.map((a) => {
-                  const pat = getPatient(a.patientId)!
-                  const doc = getDoctor(a.doctorId)!
+                  const pat = getPatient(a.patientId)
+                  const doc = getDoctor(a.doctorId)
                   return (
                     <tr key={a.id} className="text-ink-700">
                       <td className="py-3">
                         <div className="flex items-center gap-2">
-                          <Avatar src={pat.avatar} size="xs" />
-                          <span className="font-medium">{pat.name}</span>
+                          <Avatar src={pat?.avatar} size="xs" />
+                          <span className="font-medium">{pat?.name || 'کاربر'}</span>
                         </div>
                       </td>
-                      <td className="py-3 text-ink-500">{doc.name}</td>
+                      <td className="py-3 text-ink-500">{doc?.name || 'پزشک'}</td>
                       <td className="py-3 text-ink-500">{formatDateFa(a.date)}</td>
                       <td className="py-3">
                         <Badge tone={a.status === 'completed' ? 'green' : a.status === 'cancelled' ? 'red' : a.status === 'in-progress' ? 'teal' : 'amber'} dot>

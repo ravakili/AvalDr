@@ -1,7 +1,7 @@
 import { cn } from '../../lib/utils'
 
 interface Props {
-  src: string
+  src?: string
   alt?: string
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl'
   ring?: boolean
@@ -25,10 +25,11 @@ export default function Avatar({
   online = false,
   className,
 }: Props) {
+  const imgSrc = src || `https://i.pravatar.cc/300?u=${alt || 'default'}`
   return (
     <div className={cn('relative inline-flex shrink-0', className)}>
       <img
-        src={src}
+        src={imgSrc}
         alt={alt}
         className={cn(
           'rounded-full bg-white/60 object-cover shadow-sm',

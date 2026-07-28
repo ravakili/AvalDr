@@ -11,7 +11,7 @@ import {
   IconShield,
   IconTrash,
 } from '../../components/ui/icons'
-import { doctors, specialties as seed } from '../../data/mockData'
+import { doctors, specialties as seed } from '../../data/apiData'
 import { toFa } from '../../lib/utils'
 import type { Specialty } from '../../types'
 

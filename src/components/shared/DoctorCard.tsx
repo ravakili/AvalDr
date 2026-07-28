@@ -5,7 +5,7 @@ import GlassCard from '../ui/GlassCard'
 import PrimaryButton from '../ui/PrimaryButton'
 import { IconPin, IconStar } from '../ui/icons'
 import { formatToman, toFa } from '../../lib/utils'
-import { getSpecialty } from '../../data/mockData'
+import { getSpecialty } from '../../data/apiData'
 import type { Doctor } from '../../types'
 
 export default function DoctorCard({ doctor }: { doctor: Doctor }) {

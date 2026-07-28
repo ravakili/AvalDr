@@ -19,6 +19,22 @@ export interface Person {
   email?: string
 }
 
+export interface WorkingHourSlot {
+  day: string
+  from: string
+  to: string
+  breakMinutes?: number
+  appointmentDurationMinutes?: number
+  id?: string
+}
+
+export interface CommunicationSettings {
+  chat: { enabled: boolean; fee: number }
+  audio: { enabled: boolean; fee: number }
+  video: { enabled: boolean; fee: number }
+  chatAutoCloseMinutes?: number
+}
+
 export interface Doctor extends Person {
   specialtyId: string
   city: string
@@ -29,9 +45,15 @@ export interface Doctor extends Person {
   fee: number // toman
   status: 'approved' | 'pending' | 'suspended'
   bio: string
-  workingHours: { day: string; from: string; to: string; breakMinutes?: number }[]
+  workingHours: WorkingHourSlot[]
   verified?: boolean
   credentials?: string // URL to document
+  specialtyName?: string
+  specialtyIcon?: string
+  communication?: CommunicationSettings
+  cardNumber?: string
+  accountNumber?: string
+  shaba?: string
 }
 
 export interface Patient extends Person {
@@ -40,6 +62,7 @@ export interface Patient extends Person {
   gender: 'male' | 'female'
   city: string
   medicalHistory?: MedicalRecord
+  suspended?: boolean
 }
 
 export interface MedicalRecord {
@@ -63,6 +86,9 @@ export interface Appointment {
   reason: string
   consultType?: ConsultType
   createdAt?: string
+  patient?: Patient
+  doctor?: Doctor
+  paymentStatus?: string | null
 }
 
 export interface ChatMessage {
@@ -178,7 +204,34 @@ export interface PlatformSetting {
 }
 
 export interface NotificationPreference {
+  id?: string
   key: string
   label: string
   enabled: boolean
+}
+
+export interface HealthTip {
+  id: string
+  title: string
+  text: string
+  icon: string
+}
+
+export interface MedicalReport {
+  id: string
+  name: string
+  type: string
+  url: string
+  uploadedAt: string
+  saved: boolean
+}
+
+export interface UserNotification {
+  id: string
+  title: string
+  body: string
+  type: string
+  read: boolean
+  data: Record<string, unknown>
+  createdAt: string
 }

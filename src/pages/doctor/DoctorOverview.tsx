@@ -24,15 +24,15 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { appointments, doctorEarnings, getPatient } from '../../data/mockData'
+import { appointments, doctorEarnings, getPatient } from '../../data/apiData'
 import { formatDateFa, formatToman, toFa } from '../../lib/utils'
-
-const ME = 'doc-1'
+import { useAuthStore } from '../../store/authStore'
 const primaryChartColor = 'rgb(var(--color-primary-500))'
 const chartGridColor = 'rgb(148 163 184 / 0.24)'
 const chartAxisColor = '#94a3b8'
 
 export default function DoctorOverview() {
+  const ME = useAuthStore((state) => state.user?.refId || '')
   const mine = appointments.filter((a) => a.doctorId === ME)
   const today = mine.filter((a) => a.status === 'in-progress' || a.status === 'waiting')
   const pending = today.filter((a) => a.status === 'waiting')
@@ -216,7 +216,8 @@ export default function DoctorOverview() {
                 })
                 .slice(0, 6)
                 .map((a) => {
-                const pat = getPatient(a.patientId)!
+                const pat = getPatient(a.patientId)
+                if (!pat) return null
                 return (
                   <div
                     key={a.id}

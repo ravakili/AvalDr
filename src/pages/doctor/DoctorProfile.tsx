@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import GlassCard from "../../components/ui/GlassCard";
 import PrimaryButton from "../../components/ui/PrimaryButton";
 import Avatar from "../../components/ui/Avatar";
@@ -26,9 +26,11 @@ import {
   doctors,
   getSpecialty,
   specialties,
-} from "../../data/mockData";
+} from "../../data/apiData";
+import { api, apiRequest } from "../../lib/api";
+import { refreshBackendData } from "../../data/apiData";
 import { cn, formatToman, toFa } from "../../lib/utils";
-import type { ConsultType } from "../../types";
+import type { ConsultType, CommunicationSettings, WorkingHourSlot } from "../../types";
 
 type CommState = Record<ConsultType, { enabled: boolean; fee: number }>;
 
@@ -70,12 +72,46 @@ type TabKey = (typeof tabs)[number]["key"];
 
 export default function DoctorProfile() {
   const user = useAuthStore((s) => s.user);
-  const me = doctors.find((d) => d.id === (user?.refId || "doc-1"))!;
-  const specialty = getSpecialty(me.specialtyId);
+  const me = doctors.find((d) => d.id === (user?.refId || "doc-1"));
   const logout = useAuthStore((s) => s.logout);
+  const [saving, setSaving] = useState(false);
+  const avatarInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarSrc, setAvatarSrc] = useState(me.avatar);
 
-  const [hours, setHours] = useState(
-    me.workingHours.map((h) => ({ ...h, breakMinutes: h.breakMinutes ?? 15 })),
+  const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setAvatarUploading(true);
+    try {
+      const form = new FormData();
+      form.append('avatar', file);
+      const res = await apiRequest<{ avatar: string }>('/auth/me/', {
+        method: 'PATCH',
+        body: form,
+      });
+      setAvatarSrc(res.avatar);
+    } catch {
+      alert('خطا در آپلود عکس');
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshBackendData('doctor');
+  }, []);
+
+  useEffect(() => {
+    setAvatarSrc(me.avatar);
+  }, [me.avatar]);
+
+  if (!me) return <div className="p-10 text-center text-ink-500">در حال بارگذاری...</div>;
+
+  const specialty = getSpecialty(me.specialtyId);
+
+  const [hours, setHours] = useState<WorkingHourSlot[]>(
+    me.workingHours.map((h) => ({ ...h, breakMinutes: h.breakMinutes ?? 15, appointmentDurationMinutes: h.appointmentDurationMinutes ?? 30 })),
   );
   const daysOfWeek = [
     "شنبه",
@@ -107,7 +143,7 @@ export default function DoctorProfile() {
       return;
     }
     setDuplicateError("");
-    setHours((h) => [...h, { day, from, to, breakMinutes: 15 }]);
+    setHours((h) => [...h, { day, from, to, breakMinutes: 15, appointmentDurationMinutes: 30 }]);
   };
 
   const removeSlot = (idx: number) =>
@@ -115,12 +151,7 @@ export default function DoctorProfile() {
 
   const updateSlot = (
     idx: number,
-    patch: Partial<{
-      day: string;
-      from: string;
-      to: string;
-      breakMinutes: number;
-    }>,
+    patch: Partial<WorkingHourSlot>,
   ) => {
     setHours((h) => {
       const updated = h.map((x, i) => (i === idx ? { ...x, ...patch } : x));
@@ -142,10 +173,11 @@ export default function DoctorProfile() {
   };
 
   const [comm, setComm] = useState<CommState>({
-    chat: { enabled: true, fee: defaultFee.chat },
-    audio: { enabled: true, fee: defaultFee.audio },
-    video: { enabled: true, fee: defaultFee.video },
+    chat: { enabled: me.communication?.chat?.enabled ?? true, fee: me.communication?.chat?.fee ?? defaultFee.chat },
+    audio: { enabled: me.communication?.audio?.enabled ?? true, fee: me.communication?.audio?.fee ?? defaultFee.audio },
+    video: { enabled: me.communication?.video?.enabled ?? true, fee: me.communication?.video?.fee ?? defaultFee.video },
   });
+  const [chatAutoCloseMinutes, setChatAutoCloseMinutes] = useState(me.communication?.chatAutoCloseMinutes ?? 1440);
   const [commError, setCommError] = useState("");
 
   const toggleComm = (type: ConsultType) => {
@@ -167,19 +199,19 @@ export default function DoctorProfile() {
     setComm({ ...comm, [type]: { ...comm[type], fee: num } });
   };
 
-  // Address & location
-  const [address, setAddress] = useState(me.hospital || "");
-  const [location, setLocation] = useState("");
+  const [name, setName] = useState(me.name);
+  const [email, setEmail] = useState(me.email || "");
+  const [selectedSpecialty, setSelectedSpecialty] = useState(me.specialtyId);
+  const [city, setCity] = useState(me.city);
+  const [hospital, setHospital] = useState(me.hospital);
+  const [bio, setBio] = useState(me.bio);
 
-  // Payment info
-  const [cardNumber, setCardNumber] = useState("");
-  const [accountNumber, setAccountNumber] = useState("");
-  const [shaba, setShaba] = useState("");
+  const [cardNumber, setCardNumber] = useState(me.cardNumber || "");
+  const [accountNumber, setAccountNumber] = useState(me.accountNumber || "");
+  const [shaba, setShaba] = useState(me.shaba || "");
 
-  // Withdrawal modal
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
-// Active tab
   const [activeTab, setActiveTab] = useState("profile");
 
   const profileTabs = [
@@ -188,6 +220,27 @@ export default function DoctorProfile() {
     { key: "hours", label: "ساعات کاری" },
     { key: "comm", label: "قابلیت‌های ارتباطی" },
   ];
+
+  const saveAll = async () => {
+    setSaving(true);
+    try {
+      await Promise.all([
+        api.patch('/doctors/me/', {
+          name, email, specialtyId: selectedSpecialty, city, hospital, bio,
+          cardNumber, accountNumber, shaba,
+        }),
+        api.patch('/doctors/me/communication/', {
+          chat: comm.chat, audio: comm.audio, video: comm.video,
+          chatAutoCloseMinutes,
+        }),
+      ]);
+      await refreshBackendData('doctor');
+    } catch (e) {
+      alert('خطا در ذخیره اطلاعات');
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -203,7 +256,28 @@ export default function DoctorProfile() {
               <IconLogout />
             </button>
           </div>
-          <Avatar src={me.avatar} size="xl" ring />
+          <div className="relative cursor-pointer group" onClick={() => avatarInputRef.current?.click()}>
+            <div className="transition-opacity group-hover:opacity-75">
+              <Avatar src={avatarSrc} size="xl" ring />
+            </div>
+            <div className="absolute inset-0 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="rounded-full bg-black/40 p-2 text-white">
+                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                </svg>
+              </div>
+            </div>
+            {avatarUploading && (
+              <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/30">
+                <svg className="h-6 w-6 animate-spin text-white" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              </div>
+            )}
+          </div>
+          <input ref={avatarInputRef} type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} />
           <h2 className="mt-4 text-lg font-bold text-ink-800">{me.name}</h2>
           <p className="text-sm text-primary-600">
             {specialty?.icon} {specialty?.name}
@@ -272,7 +346,15 @@ export default function DoctorProfile() {
 
         {/* Tab panels */}
         {activeTab === "profile" && (
-          <ProfileTab me={me} specialty={specialty} address={address} setAddress={setAddress} location={location} setLocation={setLocation} />
+          <ProfileTab
+            me={me}
+            name={name} setName={setName}
+            email={email} setEmail={setEmail}
+            selectedSpecialty={selectedSpecialty} setSelectedSpecialty={setSelectedSpecialty}
+            city={city} setCity={setCity}
+            hospital={hospital} setHospital={setHospital}
+            bio={bio} setBio={setBio}
+          />
         )}
         {activeTab === "payment" && (
           <PaymentTab cardNumber={cardNumber} setCardNumber={setCardNumber} accountNumber={accountNumber} setAccountNumber={setAccountNumber} shaba={shaba} setShaba={setShaba} />
@@ -281,11 +363,11 @@ export default function DoctorProfile() {
           <HoursTab hours={hours} setHours={setHours} hoursByDay={hoursByDay} daysOfWeek={daysOfWeek} duplicateError={duplicateError} addSlot={addSlot} removeSlot={removeSlot} updateSlot={updateSlot} />
         )}
         {activeTab === "comm" && (
-          <CommTab comm={comm} setComm={setComm} commError={commError} toggleComm={toggleComm} setCommFee={setCommFee} />
+          <CommTab comm={comm} setComm={setComm} commError={commError} toggleComm={toggleComm} setCommFee={setCommFee} chatAutoCloseMinutes={chatAutoCloseMinutes} setChatAutoCloseMinutes={setChatAutoCloseMinutes} />
         )}
 
         <div className="mt-6 flex justify-end gap-3">
-          <PrimaryButton icon={<IconCheck />}>ذخیره تغییرات</PrimaryButton>
+          <PrimaryButton icon={<IconCheck />} onClick={saveAll} disabled={saving}>{saving ? 'در حال ذخیره...' : 'ذخیره تغییرات'}</PrimaryButton>
         </div>
       </GlassCard>
 
@@ -337,18 +419,20 @@ export default function DoctorProfile() {
 // Tab components
 function ProfileTab({
   me,
-  specialty,
-  address,
-  setAddress,
-  location,
-  setLocation,
+  name, setName,
+  email, setEmail,
+  selectedSpecialty, setSelectedSpecialty,
+  city, setCity,
+  hospital, setHospital,
+  bio, setBio,
 }: {
   me: typeof doctors[0];
-  specialty: typeof specialties[0] | undefined;
-  address: string;
-  setAddress: (v: string) => void;
-  location: string;
-  setLocation: (v: string) => void;
+  name: string; setName: (v: string) => void;
+  email: string; setEmail: (v: string) => void;
+  selectedSpecialty: string; setSelectedSpecialty: (v: string) => void;
+  city: string; setCity: (v: string) => void;
+  hospital: string; setHospital: (v: string) => void;
+  bio: string; setBio: (v: string) => void;
 }) {
   return (
     <div className="space-y-6 mt-4">
@@ -359,26 +443,30 @@ function ProfileTab({
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <InputField
           label="نام و نام خانوادگی"
-          defaultValue={me.name}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
           name="name"
         />
         <InputField
           label="شماره تماس"
           dir="ltr"
           className="text-right"
-          defaultValue={me.phone}
+          value={me.phone}
           name="phone"
+          readOnly
         />
         <InputField
           label="ایمیل"
           dir="ltr"
           className="text-right"
-          defaultValue={me.email}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
           name="email"
         />
         <SelectField
           label="تخصص"
-          defaultValue={me.specialtyId}
+          value={selectedSpecialty}
+          onChange={(e) => setSelectedSpecialty(e.target.value)}
           name="specialty"
         >
           {specialties.map((s) => (
@@ -387,28 +475,12 @@ function ProfileTab({
             </option>
           ))}
         </SelectField>
-        <InputField label="شهر" defaultValue={me.city} name="city" />
+        <InputField label="شهر" value={city} onChange={(e) => setCity(e.target.value)} name="city" />
         <InputField
           label="بیمارستان / مطب"
-          defaultValue={me.hospital}
+          value={hospital}
+          onChange={(e) => setHospital(e.target.value)}
           name="hospital"
-        />
-        <InputField
-          label="آدرس"
-          name="address"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
-          placeholder="خیابان، پلاک، واحد"
-          className="sm:col-span-2"
-        />
-        <InputField
-          label="لوکیشن (لینک نقشه)"
-          name="location"
-          value={location}
-          onChange={(e) => setLocation(e.target.value)}
-          placeholder="https://maps.google.com/..."
-          className="sm:col-span-2"
-          dir="ltr"
         />
       </div>
 
@@ -418,7 +490,8 @@ function ProfileTab({
         </label>
         <textarea
           rows={3}
-          defaultValue={me.bio}
+          value={bio}
+          onChange={(e) => setBio(e.target.value)}
           className="glass-input w-full rounded-xl px-4 py-2.5 text-sm text-ink-800 outline-none focus:ring-2 focus:ring-primary-200"
         />
       </div>
@@ -489,14 +562,14 @@ function HoursTab({
   removeSlot,
   updateSlot,
 }: {
-  hours: { day: string; from: string; to: string; breakMinutes: number }[];
-  setHours: React.Dispatch<React.SetStateAction<{ day: string; from: string; to: string; breakMinutes: number }[]>>;
-  hoursByDay: { day: string; slots: { day: string; from: string; to: string; breakMinutes: number }[] }[];
+  hours: WorkingHourSlot[];
+  setHours: React.Dispatch<React.SetStateAction<WorkingHourSlot[]>>;
+  hoursByDay: { day: string; slots: WorkingHourSlot[] }[];
   daysOfWeek: string[];
   duplicateError: string;
   addSlot: (day: string, from: string, to: string) => void;
   removeSlot: (idx: number) => void;
-  updateSlot: (idx: number, patch: Partial<{ day: string; from: string; to: string; breakMinutes: number }>) => void;
+  updateSlot: (idx: number, patch: Partial<WorkingHourSlot>) => void;
 }) {
   return (
     <div className="space-y-4 mt-4">
@@ -562,28 +635,47 @@ function HoursTab({
                           <IconTrash className="h-3.5 w-3.5" />
                         </button>
                       </div>
-                      <div className="mt-1.5 flex items-center gap-2 pr-1">
-                        <span className="text-[11px] text-ink-400">
-                          استراحت:
-                        </span>
-                        <input
-                          type="number"
-                          min={0}
-                          max={60}
-                          value={hours[idx].breakMinutes}
-                          onChange={(e) =>
-                            updateSlot(idx, {
-                              breakMinutes: Math.max(
-                                0,
-                                Number(e.target.value),
-                              ),
-                            })
-                          }
-                          className="w-16 rounded-lg border border-white/50 bg-white/50 px-2 py-1 text-center text-xs tabular text-ink-700 outline-none"
-                        />
-                        <span className="text-[11px] text-ink-400">
-                          دقیقه
-                        </span>
+                      <div className="mt-1.5 flex items-center gap-4 pr-1 flex-wrap">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-ink-400">
+                            استراحت:
+                          </span>
+                          <input
+                            type="number"
+                            min={0}
+                            max={60}
+                            value={hours[idx].breakMinutes}
+                            onChange={(e) =>
+                              updateSlot(idx, {
+                                breakMinutes: Math.max(0, Number(e.target.value)),
+                              })
+                            }
+                            className="w-16 rounded-lg border border-white/50 bg-white/50 px-2 py-1 text-center text-xs tabular text-ink-700 outline-none"
+                          />
+                          <span className="text-[11px] text-ink-400">
+                            دقیقه
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] text-ink-400">
+                            مدت ویزیت:
+                          </span>
+                          <input
+                            type="number"
+                            min={5}
+                            max={180}
+                            value={hours[idx].appointmentDurationMinutes ?? 30}
+                            onChange={(e) =>
+                              updateSlot(idx, {
+                                appointmentDurationMinutes: Math.max(5, Number(e.target.value)),
+                              })
+                            }
+                            className="w-16 rounded-lg border border-white/50 bg-white/50 px-2 py-1 text-center text-xs tabular text-ink-700 outline-none"
+                          />
+                          <span className="text-[11px] text-ink-400">
+                            دقیقه
+                          </span>
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -605,12 +697,16 @@ function CommTab({
   commError,
   toggleComm,
   setCommFee,
+  chatAutoCloseMinutes,
+  setChatAutoCloseMinutes,
 }: {
   comm: Record<ConsultType, { enabled: boolean; fee: number }>;
   setComm: React.Dispatch<React.SetStateAction<typeof comm>>;
   commError: string;
   toggleComm: (type: ConsultType) => void;
   setCommFee: (type: ConsultType, fee: string) => void;
+  chatAutoCloseMinutes: number;
+  setChatAutoCloseMinutes: (v: number) => void;
 }) {
   return (
     <div className="space-y-4 mt-4">
@@ -699,6 +795,33 @@ function CommTab({
             )}
           </div>
         ))}
+      </div>
+
+      {/* Auto-close chat timer */}
+      <div className="rounded-2xl border border-white/50 bg-white/40 p-4">
+        <div className="flex items-center gap-3 mb-3">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-ink-100 text-ink-500">
+            <IconClock className="h-5 w-5" />
+          </div>
+          <div>
+            <p className="text-sm font-medium text-ink-700">بستن خودکار چت</p>
+            <p className="text-xs text-ink-400">
+              پس از اتمام جلسه، چت به‌طور خودکار بسته شود
+            </p>
+          </div>
+        </div>
+        <div className="flex items-center gap-2 pr-1">
+          <input
+            type="number"
+            min={0}
+            max={43200}
+            value={chatAutoCloseMinutes}
+            onChange={(e) => setChatAutoCloseMinutes(Math.max(0, Number(e.target.value)))}
+            className="w-20 rounded-lg border border-white/50 bg-white/50 px-2 py-1.5 text-center text-sm tabular text-ink-700 outline-none"
+          />
+          <span className="text-xs text-ink-400">دقیقه</span>
+          <span className="text-xs text-ink-400 mx-1">({Math.floor(chatAutoCloseMinutes / 1440)} روز {Math.floor((chatAutoCloseMinutes % 1440) / 60)} ساعت)</span>
+        </div>
       </div>
 
       {commError && (

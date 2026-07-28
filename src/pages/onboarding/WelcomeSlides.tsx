@@ -5,7 +5,7 @@ import PrimaryButton from "../../components/ui/PrimaryButton";
 
 const slides = [
   {
-    title: "به دکتر ساینا خوش آمدید",
+    title: "به اول دکتر خوش آمدید",
     desc: "در هر زمان و هر مکان به بهترین پزشکان متصل شوید",
     icon: (
       <svg

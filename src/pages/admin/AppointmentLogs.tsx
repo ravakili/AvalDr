@@ -6,7 +6,7 @@ import PrimaryButton from '../../components/ui/PrimaryButton'
 import InputField, { SelectField } from '../../components/ui/InputField'
 import EmptyState from '../../components/ui/EmptyState'
 import { IconDownload, IconLog } from '../../components/ui/icons'
-import { appointments, auditLogs, doctors, getDoctor, getPatient, patients } from '../../data/mockData'
+import { appointments, auditLogs, doctors, getDoctor, getPatient, patients } from '../../data/apiData'
 import { formatDateFa, toFa } from '../../lib/utils'
 
 const actionLabels: Record<string, { label: string; tone: 'gray' | 'green' | 'amber' | 'red' | 'blue' | 'teal' }> = {

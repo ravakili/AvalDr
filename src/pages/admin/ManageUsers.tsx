@@ -12,7 +12,7 @@ import {
   IconUsers,
 } from '../../components/ui/icons'
 import { cn, toFa } from '../../lib/utils'
-import { patients } from '../../data/mockData'
+import { patients } from '../../data/apiData'
 import type { Patient } from '../../types'
 
 export default function ManageUsers() {

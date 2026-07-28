@@ -1,7 +1,8 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Role, User, UserData, UploadingFile } from "../types";
-import { findUserByPhone, addUser } from "../data/mockData";
+import { api } from "../lib/api";
+import { setApiTokens } from "../lib/api";
 
 interface AuthState {
   user: User | null;
@@ -53,11 +54,6 @@ const defaultUserData: UserData = {
   receivePromotions: false,
 };
 
-const avatar = (seed: string) =>
-  `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&radius=20&backgroundColor=b6e3f4,c0aede,d1f4e0`;
-
-const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
-
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -81,13 +77,14 @@ export const useAuthStore = create<AuthState>()(
             id: `${role}-${Date.now()}`,
             name: name || "کاربر",
             role,
-            avatar: avatar(name || role),
+            avatar: "",
             phone,
           },
         });
       },
 
-      logout: () =>
+      logout: () => {
+        setApiTokens(null);
         set({
           user: null,
           phone: "",
@@ -101,51 +98,55 @@ export const useAuthStore = create<AuthState>()(
           userData: { ...defaultUserData },
           uploadedDocs: {},
           isDoctor: false,
-        }),
+        });
+      },
 
       setPhone: (phone) => set({ phone }),
 
       sendOTP: async (phone) => {
         set({ isLoading: true, phone, otpCode: "" });
-        await wait(1500);
-        const code = Math.floor(100000 + Math.random() * 900000).toString();
-        console.info("[AvalDr Mock OTP]", `کد تایید برای ${phone}: ${code}`);
-        const existing = findUserByPhone(phone);
-        set({
-          otpCode: code,
-          otpSent: true,
-          isNewUser: !existing,
-          isLoading: false,
-          otpTimer: 120,
-          resendCount: 0,
-        });
+        try {
+          const response = await api.post<{ debugCode?: string; expiresIn: number }>(
+            "/auth/send-otp/",
+            { phone },
+          );
+          set({
+            otpCode: response.debugCode || "",
+            otpSent: true,
+            isLoading: false,
+            otpTimer: response.expiresIn || 120,
+          });
+        } catch (error) {
+          set({ isLoading: false });
+          throw error;
+        }
       },
 
       verifyOTP: async (code) => {
-        const { otpCode, phone } = get();
+        const { phone } = get();
         set({ isLoading: true });
-        await wait(1200);
-        if (code !== otpCode) {
+        try {
+          const response = await api.post<{
+            access: string;
+            refresh: string;
+            user: User;
+            isNewUser: boolean;
+          }>("/auth/verify-otp/", { phone, code });
+          setApiTokens({ access: response.access, refresh: response.refresh });
+          set({
+            user: response.isNewUser ? null : response.user,
+            isLoading: false,
+            isNewUser: response.isNewUser,
+          });
+          return {
+            success: true,
+            isNewUser: response.isNewUser,
+            role: response.user.role,
+          };
+        } catch {
           set({ isLoading: false });
           return { success: false, isNewUser: false };
         }
-        const existing = findUserByPhone(phone);
-        if (existing) {
-          set({
-            user: {
-              id: `${existing.role}-${Date.now()}`,
-              name: existing.name,
-              role: existing.role,
-              avatar: avatar(existing.name),
-              phone: existing.phone,
-              documents: existing.documents,
-            },
-            isLoading: false,
-          });
-          return { success: true, isNewUser: false, role: existing.role };
-        }
-        set({ isLoading: false, isNewUser: true });
-        return { success: true, isNewUser: true };
       },
 
       decrementTimer: () => {
@@ -186,27 +187,25 @@ export const useAuthStore = create<AuthState>()(
       },
 
       completeProfile: async () => {
-        const { userData, phone, isDoctor } = get();
+        const { userData, isDoctor } = get();
         set({ isLoading: true });
-        await wait(2000);
-        const role: Role = isDoctor ? "doctor" : "user";
-        const name = userData.name || "کاربر جدید";
-        addUser({ phone, role, name, documents: null });
-        set({
-          user: {
-            id: `${role}-${Date.now()}`,
-            name,
-            role,
-            avatar: avatar(name),
-            phone,
-            documents: null,
-          },
-          isLoading: false,
-          step: 1,
-          userData: { ...defaultUserData },
-          isDoctor: false,
-          uploadedDocs: {},
-        });
+        try {
+          const user = await api.post<User>("/auth/complete-profile/", {
+            ...userData,
+            isDoctor,
+          });
+          set({
+            user,
+            isLoading: false,
+            step: 1,
+            userData: { ...defaultUserData },
+            isDoctor: false,
+            uploadedDocs: {},
+          });
+        } catch (error) {
+          set({ isLoading: false });
+          throw error;
+        }
       },
 
       reset: () =>

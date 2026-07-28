@@ -17,7 +17,7 @@ import {
   IconShield,
   IconStethoscope,
 } from '../../components/ui/icons'
-import { doctors as seed, getSpecialty, patients, specialties } from '../../data/mockData'
+import { doctors as seed, getSpecialty, patients, specialties } from '../../data/apiData'
 import { cn, toFa } from '../../lib/utils'
 import type { Doctor } from '../../types'
 

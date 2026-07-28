@@ -23,30 +23,25 @@ import {
   IconUpload,
   IconVideo,
 } from '../../components/ui/icons'
-import { appointments, chatMessages as seedMessages, drugSuggestions, getPatient } from '../../data/mockData'
+import { appointments, drugSuggestions, getPatient } from '../../data/apiData'
+import { getDoctor, refreshBackendData } from '../../data/apiData'
+import { api } from '../../lib/api'
+import { useAuthStore } from '../../store/authStore'
 import { cn, formatDateFa, toFa } from '../../lib/utils'
 import type { ChatMessage } from '../../types'
 import { MdOutlineKeyboardArrowRight } from 'react-icons/md'
 import { User } from 'lucide-react'
 
-const ME = 'doc-1'
-
-// Canned auto-reply for the patient side to make the chat feel alive.
-const replies = [
-  'بله دکتر، همینطور است.',
-  'ممنون از راهنمایی شما.',
-  'قبلاً آزمایش دادم، نتیجه طبیعی بود.',
-  'گاهی سرگیجه هم دارم.',
-  'باشه، حتماً طبق دستور عمل می‌کنم.',
-]
-
 export default function Consultation() {
   const { appointmentId } = useParams()
   const navigate = useNavigate()
   const appt = appointments.find((a) => a.id === appointmentId)
+  const user = useAuthStore((state) => state.user)
+  const isDoctor = user?.role === 'doctor'
+  const ME = user?.id || ''
 
   const [messages, setMessages] = useState<ChatMessage[]>(
-    appt ? seedMessages : [],
+    [],
   )
   const [draft, setDraft] = useState('')
   const [rxOpen, setRxOpen] = useState(false)
@@ -77,6 +72,25 @@ export default function Consultation() {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' })
   }, [messages])
 
+  useEffect(() => {
+    if (!appointmentId) return
+    let active = true
+    const fetchMessages = () =>
+      api
+        .get<ChatMessage[]>(`/chat/appointments/${appointmentId}/messages/`)
+        .then((msgs) => { if (active) setMessages(msgs) })
+        .catch(() => {})
+    fetchMessages()
+    const interval = setInterval(fetchMessages, 3000)
+    if (isDoctor && appt?.status === 'waiting') {
+      api
+        .post(`/appointments/${appointmentId}/start/`)
+        .then(() => refreshBackendData('doctor'))
+        .catch(console.error)
+    }
+    return () => { active = false; clearInterval(interval) }
+  }, [appointmentId, isDoctor])
+
   if (!appt) {
     return (
       <EmptyState
@@ -89,60 +103,45 @@ export default function Consultation() {
   }
 
   const patient = getPatient(appt.patientId)!
+  const doctor = getDoctor(appt.doctorId)
+  const counterpart = isDoctor ? patient : doctor
+  if (!counterpart) return null
 
-  const send = () => {
+  const send = async () => {
     const text = draft.trim()
     if (!text) return
-    const now = new Intl.DateTimeFormat('fa-IR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date())
-    const msg: ChatMessage = {
-      id: `m-${Date.now()}`,
-      senderId: ME,
-      text,
-      time: now,
-      type: 'text',
+    try {
+      const message = await api.post<ChatMessage>(
+        `/chat/appointments/${appt.id}/messages/`,
+        { text, type: 'text' },
+      )
+      setMessages((items) => [...items, message])
+      setDraft('')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'ارسال پیام انجام نشد')
     }
-    setMessages((m) => [...m, msg])
-    setDraft('')
-
-    // Simulated patient reply
-    setTimeout(() => {
-      setMessages((m) => [
-        ...m,
-        {
-          id: `m-${Date.now()}-r`,
-          senderId: appt.patientId,
-          text: replies[Math.floor(Math.random() * replies.length)],
-          time: now,
-          type: 'text',
-        },
-      ])
-    }, 1400)
   }
 
-  const submitPrescription = () => {
+  const submitPrescription = async () => {
     const valid = rxItems.filter((i) => i.drug.trim())
     if (!valid.length) return
-    const summary = valid.map((i) => `💊 ${i.drug} — ${i.usage}`).join('\n')
-    const now = new Intl.DateTimeFormat('fa-IR', {
-      hour: '2-digit',
-      minute: '2-digit',
-    }).format(new Date())
-    setMessages((m) => [
-      ...m,
-      {
-        id: `rx-${Date.now()}`,
-        senderId: ME,
-        text: `${summary}${rxNotes ? `\n📝 ${rxNotes}` : ''}`,
-        time: now,
-        type: 'prescription',
-      },
-    ])
-    setRxOpen(false)
-    setRxItems([{ drug: '', usage: '' }])
-    setRxNotes('')
+    try {
+      await api.post('/prescriptions/', {
+        appointmentId: appt.id,
+        items: valid,
+        notes: rxNotes,
+      })
+      const nextMessages = await api.get<ChatMessage[]>(
+        `/chat/appointments/${appt.id}/messages/`,
+      )
+      setMessages(nextMessages)
+      setRxOpen(false)
+      setRxItems([{ drug: '', usage: '' }])
+      setRxNotes('')
+      await refreshBackendData('doctor')
+    } catch (error) {
+      alert(error instanceof Error ? error.message : 'ثبت نسخه انجام نشد')
+    }
   }
 
   return (
@@ -150,22 +149,22 @@ export default function Consultation() {
       {/* Header */}
       <GlassCard className="flex flex-wrap items-center gap-4 p-4">
         <button
-          onClick={() => navigate('/doctor/appointments')}
+          onClick={() => navigate(isDoctor ? '/doctor/appointments' : '/user/appointments')}
           className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-white/60"
           aria-label="بازگشت"
         >
           <MdOutlineKeyboardArrowRight />
         </button>
-        <Avatar src={patient.avatar} size="md" ring online />
+        <Avatar src={counterpart.avatar} size="md" ring online />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="truncate font-bold text-ink-800">{patient.name}</h2>
+            <h2 className="truncate font-bold text-ink-800">{counterpart.name}</h2>
             <Badge tone="green" dot>
               آنلاین
             </Badge>
           </div>
           <p className="text-xs text-ink-400">
-            {patient.gender === 'male' ? 'آقا' : 'خانم'} • {toFa(patient.age)} سال
+            {isDoctor && patient ? `${patient.gender === 'male' ? 'آقا' : 'خانم'} • ${toFa(patient.age)} سال` : doctor?.specialtyName || ''}
           </p>
         </div>
         <div className="flex items-center gap-4 text-xs text-ink-500">
@@ -195,16 +194,20 @@ export default function Consultation() {
               قطع تماس ({callTime})
             </PrimaryButton>
           )}
-          <PrimaryButton
-            variant="ghost"
-            icon={<IconPrescription />}
-            onClick={() => setRxOpen(true)}
-          >
-            صدور نسخه
-          </PrimaryButton>
-          <PrimaryButton variant="danger" onClick={() => setEndOpen(true)}>
-            پایان جلسه
-          </PrimaryButton>
+          {isDoctor && (
+            <>
+              <PrimaryButton
+                variant="ghost"
+                icon={<IconPrescription />}
+                onClick={() => setRxOpen(true)}
+              >
+                صدور نسخه
+              </PrimaryButton>
+              <PrimaryButton variant="danger" onClick={() => setEndOpen(true)}>
+                پایان جلسه
+              </PrimaryButton>
+            </>
+          )}
         </div>
       </GlassCard>
 
@@ -214,16 +217,16 @@ export default function Consultation() {
           <div className="grid grid-cols-1 gap-3 p-4 sm:grid-cols-2">
             {/* Remote (patient) */}
             <div className="flex aspect-video flex-col items-center justify-center rounded-2xl bg-ink-900 text-white">
-              <Avatar src={patient.avatar} size="xl" />
-              <p className="mt-3 font-semibold">{patient.name}</p>
-              <p className="text-xs text-white/60">بیمار</p>
+              <Avatar src={counterpart.avatar} size="xl" />
+              <p className="mt-3 font-semibold">{counterpart.name}</p>
+              <p className="text-xs text-white/60">{isDoctor ? 'بیمار' : 'پزشک'}</p>
             </div>
             {/* Local (doctor) */}
             <div className="flex aspect-video flex-col items-center justify-center rounded-2xl bg-ink-800 text-white">
               {cameraOff ? (
                 <div className="grid h-16 w-16 place-items-center rounded-full bg-ink-700 text-2xl">🩺</div>
               ) : (
-                <Avatar src="https://api.dicebear.com/7.x/avataaars/svg?seed=sara&radius=20" size="xl" />
+                <Avatar src="https://i.pravatar.cc/300?u=doctor" size="xl" />
               )}
               <p className="mt-3 font-semibold">شما</p>
               <p className="text-xs text-white/60">دکتر سارا محمدی</p>
@@ -283,7 +286,7 @@ export default function Consultation() {
                 className={cn('flex gap-2.5', mine ? 'flex-row-reverse' : 'flex-row')}
               >
                 <Avatar
-                  src={mine ? 'https://api.dicebear.com/7.x/avataaars/svg?seed=sara&radius=20' : patient.avatar}
+                  src={mine ? 'https://i.pravatar.cc/300?u=doctor' : patient.avatar}
                   size="sm"
                 />
                 <div className={cn('max-w-[75%]', mine ? 'items-end' : 'items-start')}>
@@ -316,13 +319,15 @@ export default function Consultation() {
         {/* Composer */}
         <div className="border-t border-white/50 p-3">
           <div className="glass-soft flex items-end gap-2 rounded-2xl p-2">
-            <button
-              onClick={() => setRxOpen(true)}
-              className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-primary-600 transition hover:bg-primary-50"
-              title="ارسال نسخه"
-            >
-              <IconPrescription />
-            </button>
+            {isDoctor && (
+              <button
+                onClick={() => setRxOpen(true)}
+                className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-primary-600 transition hover:bg-primary-50"
+                title="ارسال نسخه"
+              >
+                <IconPrescription />
+              </button>
+            )}
             <button
               onClick={() => fileRef.current?.click()}
               className="grid h-10 w-10 shrink-0 place-items-center rounded-xl text-ink-500 transition hover:bg-primary-50"
@@ -335,14 +340,18 @@ export default function Consultation() {
               type="file"
               className="hidden"
               accept=".pdf,.jpg,.png,.doc"
-              onChange={(e) => {
+              onChange={async (e) => {
                 const f = e.target.files?.[0]
                 if (!f) return
-                const now = new Intl.DateTimeFormat('fa-IR', { hour: '2-digit', minute: '2-digit' }).format(new Date())
-                setMessages((m) => [
-                  ...m,
-                  { id: `f-${Date.now()}`, senderId: ME, text: `📎 ${f.name}`, time: now, type: 'file', fileName: f.name },
-                ])
+                const form = new FormData()
+                form.append('file', f)
+                form.append('text', `📎 ${f.name}`)
+                form.append('type', 'file')
+                const message = await api.post<ChatMessage>(
+                  `/chat/appointments/${appt.id}/messages/`,
+                  form,
+                )
+                setMessages((items) => [...items, message])
                 e.target.value = ''
               }}
             />
@@ -474,8 +483,11 @@ export default function Consultation() {
             <PrimaryButton
               variant="danger"
               onClick={() => {
-                setEndOpen(false)
-                navigate('/doctor/appointments')
+                api.post(`/appointments/${appt.id}/complete/`).then(async () => {
+                  await refreshBackendData('doctor')
+                  setEndOpen(false)
+                  navigate('/doctor/appointments')
+                })
               }}
             >
               بله، پایان جلسه

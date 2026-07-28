@@ -5,7 +5,7 @@ import InputField, { SelectField } from '../../components/ui/InputField'
 import Toggle from '../../components/ui/Toggle'
 import Tabs from '../../components/ui/Tabs'
 import { IconCheck, IconSettings } from '../../components/ui/icons'
-import { platformSettings as seed } from '../../data/mockData'
+import { platformSettings as seed } from '../../data/apiData'
 import type { PlatformSetting } from '../../types'
 
 type Section = 'general' | 'fees' | 'notifications' | 'templates'
