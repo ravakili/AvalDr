@@ -88,7 +88,7 @@ export default function DashboardLayout({ role }: Props) {
 
   const meta = titles[key] || titles[`/${role}`];
   const title = key === `/${role}`
-    ? `${greetings[role]}${user?.name ? `، ${user.name}` : ''} 👋`
+    ? `${greetings[role]}${user?.name ? `، ${user.name.split(" ")[0]}` : ''} 👋`
     : meta.title;
   const subtitle = key === `/${role}` ? meta.subtitle || subtitles[role] : meta.subtitle;
 

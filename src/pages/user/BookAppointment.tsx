@@ -6,7 +6,7 @@ import Avatar from '../../components/ui/Avatar'
 import Badge from '../../components/ui/Badge'
 import { TextArea } from '../../components/ui/InputField'
 import { cn, formatToman, toFa } from '../../lib/utils'
-import { getDoctor, getSpecialty, refreshBackendData } from '../../data/apiData'
+import { doctorName, getDoctor, getSpecialty, refreshBackendData } from '../../data/apiData'
 import { api } from '../../lib/api'
 import {
   IconCalendar,
@@ -233,7 +233,7 @@ export default function BookAppointment() {
           <Avatar src={doctor.avatar} size="xl" ring />
           <div className="min-w-0 flex-1">
             <div className="flex flex-wrap items-center gap-2">
-              <h2 className="text-xl font-bold text-ink-800">{doctor.name}</h2>
+              <h2 className="text-xl font-bold text-ink-800">{doctorName(doctor)}</h2>
               <Badge tone="amber">
                 <IconStar className="h-3 w-3" /> {toFa(doctor.rating.toFixed(1))}
               </Badge>
@@ -373,7 +373,7 @@ export default function BookAppointment() {
         <GlassCard variant="soft" className="h-fit p-6">
           <h3 className="font-bold text-ink-800">خلاصه نوبت</h3>
           <dl className="mt-4 space-y-3 text-sm">
-            <Row label="پزشک" value={doctor.name} />
+            <Row label="پزشک" value={doctorName(doctor)} />
             <Row label="تخصص" value={`${specialty?.icon} ${specialty?.name}`} />
             <Row label="روز" value={new Intl.DateTimeFormat('fa-IR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(day))} />
             <Row label="ساعت" value={time ? `${toFa(time)}` : '—'} highlight />
@@ -488,7 +488,7 @@ export default function BookAppointment() {
                 </div>
                 <h3 className="text-lg font-bold text-ink-800">پرداخت با موفقیت انجام شد</h3>
                 <p className="text-sm text-ink-500">
-                  نوبت شما با <b>{doctor.name}</b> در {new Intl.DateTimeFormat('fa-IR', { day: 'numeric', month: 'long' }).format(new Date(day))} ساعت <b className="tabular">{toFa(time)}</b> تایید شد.
+                  نوبت شما با <b>{doctorName(doctor)}</b> در {new Intl.DateTimeFormat('fa-IR', { day: 'numeric', month: 'long' }).format(new Date(day))} ساعت <b className="tabular">{toFa(time)}</b> تایید شد.
                 </p>
                 <p className="text-xs text-ink-400">کد پیگیری: {toFa(Math.floor(Math.random() * 90000) + 10000)}</p>
                 <PrimaryButton className="mt-2 w-full" icon={<IconCheck />} onClick={closePayment}>

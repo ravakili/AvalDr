@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import GlassCard from '../../components/ui/GlassCard'
 import PrimaryButton from '../../components/ui/PrimaryButton'
 import Modal from '../../components/ui/Modal'
@@ -12,13 +12,24 @@ import {
   IconShield,
   IconTrash,
 } from '../../components/ui/icons'
-import { toFa } from '../../lib/utils'
+import { api } from '../../lib/api'
+import type { Specialty, HealthTip } from '../../types'
 
-type Tab = 'specialties' | 'diagnoses' | 'allergies' | 'drugs' | 'cities' | 'tips'
+type Tab = 'specialties' | 'diagnoses' | 'allergies' | 'drugs' | 'cities' | 'insurance_type' | 'supplementary_insurance' | 'prefix' | 'tips'
 
 interface NamedItem {
   id: string
   name: string
+}
+
+const typeMap: Record<string, string> = {
+  diagnoses: 'diagnosis',
+  allergies: 'allergy',
+  drugs: 'drug',
+  cities: 'city',
+  insurance_type: 'insurance_type',
+  supplementary_insurance: 'supplementary_insurance',
+  prefix: 'prefix',
 }
 
 const tabs: { key: Tab; label: string }[] = [
@@ -27,11 +38,15 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'allergies', label: 'آلرژی‌ها' },
   { key: 'drugs', label: 'داروها' },
   { key: 'cities', label: 'شهرها' },
+  { key: 'insurance_type', label: 'نوع بیمه درمانی' },
+  { key: 'supplementary_insurance', label: 'بیمه تکمیلی' },
+  { key: 'prefix', label: 'پیشوند' },
   { key: 'tips', label: 'نکات' },
 ]
 
 export default function AdminDefinitions() {
   const [tab, setTab] = useState<Tab>('specialties')
+  const [loading, setLoading] = useState(false)
   const [open, setOpen] = useState(false)
   const [editId, setEditId] = useState<string | null>(null)
   const [name, setName] = useState('')
@@ -40,74 +55,46 @@ export default function AdminDefinitions() {
   const [tipText, setTipText] = useState('')
   const [tipIcon, setTipIcon] = useState('💡')
 
-  // Data per tab
-  const [specialties, setSpecialties] = useState(
-    JSON.parse(sessionStorage.getItem('def-specialties') || 'null') || [
-      { id: 'sp-cardio', name: 'قلب و عروق', icon: '🫀' },
-      { id: 'sp-derma', name: 'پوست و مو', icon: '🧴' },
-      { id: 'sp-neuro', name: 'مغز و اعصاب', icon: '🧠' },
-      { id: 'sp-ortho', name: 'ارتوپدی', icon: '🦴' },
-      { id: 'sp-ped', name: 'اطفال', icon: '🧸' },
-      { id: 'sp-ent', name: 'گوش و حلق و بینی', icon: '👂' },
-      { id: 'sp-eye', name: 'چشم پزشکی', icon: '👁️' },
-      { id: 'sp-psy', name: 'روان پزشکی', icon: '🧘' },
-      { id: 'sp-dental', name: 'دندان پزشکی', icon: '🦷' },
-      { id: 'sp-gp', name: 'پزشک عمومی', icon: '🩺' },
-    ],
-  )
-  const [diagnoses, setDiagnoses] = useState(getPersisted<NamedItem[]>('def-diagnoses', [
-    { id: 'dx-1', name: 'فشار خون بالا' },
-    { id: 'dx-2', name: 'دیابت نوع ۲' },
-    { id: 'dx-3', name: 'چربی خون' },
-    { id: 'dx-4', name: 'میگرن مزمن' },
-    { id: 'dx-5', name: 'کم‌خونی' },
-    { id: 'dx-6', name: 'آسم' },
-  ]))
-  const [allergies, setAllergies] = useState(getPersisted<NamedItem[]>('def-allergies', [
-    { id: 'al-1', name: 'پنی‌سیلین' },
-    { id: 'al-2', name: 'سولفونامید' },
-    { id: 'al-3', name: 'گلوتن' },
-    { id: 'al-4', name: 'گرده گل' },
-    { id: 'al-5', name: 'آسپرین' },
-  ]))
-  const [drugs, setDrugs] = useState(getPersisted<NamedItem[]>('def-drugs', [
-    { id: 'dr-1', name: 'آتورواستاتین ۲۰ میلی‌گرم' },
-    { id: 'dr-2', name: 'متفورمین ۵۰۰ میلی‌گرم' },
-    { id: 'dr-3', name: 'لوزارتان ۵۰ میلی‌گرم' },
-    { id: 'dr-4', name: 'آسپرین ۸۰ میلی‌گرم' },
-    { id: 'dr-5', name: 'امپرازول ۲۰ میلی‌گرم' },
-    { id: 'dr-6', name: 'سوماتریپتان ۵۰ میلی‌گرم' },
-    { id: 'dr-7', name: 'فلوکستین ۲۰ میلی‌گرم' },
-    { id: 'dr-8', name: 'لوراتادین ۱۰ میلی‌گرم' },
-  ]))
-  const [cities, setCities] = useState(getPersisted<NamedItem[]>('def-cities', [
-    { id: 'ct-1', name: 'تهران' },
-    { id: 'ct-2', name: 'اصفهان' },
-    { id: 'ct-3', name: 'شیراز' },
-    { id: 'ct-4', name: 'مشهد' },
-    { id: 'ct-5', name: 'تبریز' },
-    { id: 'ct-6', name: 'اهواز' },
-    { id: 'ct-7', name: 'کرج' },
-    { id: 'ct-8', name: 'قم' },
-  ]))
-  const [tips, setTips] = useState(getPersisted<any[]>('def-tips', [
-    { id: 'tp-1', title: 'آب بنوشید', text: 'روزانه ۸ لیوان آب بنوشید تا بدنی سالم داشته باشید', icon: '💧' },
-    { id: 'tp-2', title: 'پیاده‌روی', text: '۳۰ دقیقه پیاده‌روی روزانه به سلامت قلب کمک می‌کند', icon: '🚶' },
-    { id: 'tp-3', title: 'تغذیه سالم', text: 'مصرف نمک را کاهش دهید و میوه و سبزیجات تازه مصرف کنید', icon: '🥗' },
-    { id: 'tp-4', title: 'خواب کافی', text: '۷ تا ۸ ساعت خواب مفید برای بازسازی بدن ضروری است', icon: '😴' },
-  ]))
+  const [specialties, setSpecialties] = useState<Specialty[]>([])
+  const [diagnoses, setDiagnoses] = useState<NamedItem[]>([])
+  const [allergies, setAllergies] = useState<NamedItem[]>([])
+  const [drugs, setDrugs] = useState<NamedItem[]>([])
+  const [cities, setCities] = useState<NamedItem[]>([])
+  const [insuranceTypes, setInsuranceTypes] = useState<NamedItem[]>([])
+  const [supplementaryInsurances, setSupplementaryInsurances] = useState<NamedItem[]>([])
+  const [prefixes, setPrefixes] = useState<NamedItem[]>([])
+  const [tips, setTips] = useState<HealthTip[]>([])
 
-  function getPersisted<T>(key: string, fallback: T): T {
+  useEffect(() => {
+    loadTabData()
+  }, [tab])
+
+  async function loadTabData() {
     try {
-      const raw = sessionStorage.getItem(key)
-      return raw ? JSON.parse(raw) : fallback
-    } catch {
-      return fallback
+      setLoading(true)
+      if (tab === 'specialties') {
+        const data = await api.get<Specialty[]>('/admin/specialties/')
+        setSpecialties(data)
+      } else if (tab === 'tips') {
+        const data = await api.get<HealthTip[]>('/admin/health-tips/')
+        setTips(data)
+      } else {
+        const data = await api.get<NamedItem[]>(`/admin/definitions/?type=${typeMap[tab] || tab}`)
+        switch (tab) {
+          case 'diagnoses': setDiagnoses(data); break
+          case 'allergies': setAllergies(data); break
+          case 'drugs': setDrugs(data); break
+          case 'cities': setCities(data); break
+          case 'insurance_type': setInsuranceTypes(data); break
+          case 'supplementary_insurance': setSupplementaryInsurances(data); break
+          case 'prefix': setPrefixes(data); break
+        }
+      }
+    } catch (err) {
+      console.error(err)
+    } finally {
+      setLoading(false)
     }
-  }
-
-  function persist(key: string, data: unknown) {
-    sessionStorage.setItem(key, JSON.stringify(data))
   }
 
   const currentItems = () => {
@@ -117,37 +104,10 @@ export default function AdminDefinitions() {
       case 'allergies': return allergies
       case 'drugs': return drugs
       case 'cities': return cities
+      case 'insurance_type': return insuranceTypes
+      case 'supplementary_insurance': return supplementaryInsurances
+      case 'prefix': return prefixes
       case 'tips': return tips
-    }
-  }
-
-  const setItems = (items: any[]) => {
-    const key = `def-${tab}`
-    switch (tab) {
-      case 'specialties':
-        setSpecialties(items)
-        persist('def-specialties', items)
-        break
-      case 'diagnoses':
-        setDiagnoses(items)
-        persist(key, items)
-        break
-      case 'allergies':
-        setAllergies(items)
-        persist(key, items)
-        break
-      case 'drugs':
-        setDrugs(items)
-        persist(key, items)
-        break
-      case 'cities':
-        setCities(items)
-        persist(key, items)
-        break
-      case 'tips':
-        setTips(items)
-        persist(key, items)
-        break
     }
   }
 
@@ -183,38 +143,63 @@ export default function AdminDefinitions() {
     setOpen(true)
   }
 
-  const save = () => {
-    if (tab === 'specialties' && !name.trim()) return
-    if (tab !== 'tips' && tab !== 'specialties' && !name.trim()) return
-    if (tab === 'tips' && !tipTitle.trim()) return
-
-    const items = [...currentItems()]
-
-    if (editId) {
-      setItems(items.map((item: any) => {
-        if (tab === 'specialties' && item.id === editId) return { ...item, name: name.trim(), icon }
-        if (tab === 'tips' && item.id === editId) return { ...item, title: tipTitle.trim(), text: tipText.trim(), icon: tipIcon }
-        if (item.id === editId) return { ...item, name: name.trim() }
-        return item
-      }))
-    } else {
-      const newItem: any = { id: `${tab.slice(0, 3)}-${Date.now()}` }
-      if (tab === 'specialties') {
-        newItem.name = name.trim()
-        newItem.icon = icon
-      } else if (tab === 'tips') {
-        newItem.title = tipTitle.trim()
-        newItem.text = tipText.trim()
-        newItem.icon = tipIcon
-      } else {
-        newItem.name = name.trim()
+  const save = async () => {
+    if (tab === 'specialties') {
+      if (!name.trim()) return
+      try {
+        if (editId) {
+          await api.patch(`/admin/specialties/${editId}/`, { name, icon, description: '' })
+        } else {
+          await api.post('/admin/specialties/', { name, icon, description: '' })
+        }
+        await loadTabData()
+        setOpen(false)
+      } catch (err) {
+        console.error(err)
       }
-      setItems([...items, newItem])
+    } else if (tab === 'tips') {
+      if (!tipTitle.trim()) return
+      try {
+        if (editId) {
+          await api.patch(`/admin/health-tips/${editId}/`, { title: tipTitle.trim(), text: tipText.trim(), icon: tipIcon })
+        } else {
+          await api.post('/admin/health-tips/', { title: tipTitle.trim(), text: tipText.trim(), icon: tipIcon })
+        }
+        await loadTabData()
+        setOpen(false)
+      } catch (err) {
+        console.error(err)
+      }
+    } else {
+      if (!name.trim()) return
+      try {
+        if (editId) {
+          await api.patch(`/admin/definitions/${editId}/`, { name: name.trim() })
+        } else {
+          await api.post('/admin/definitions/', { type: typeMap[tab] || tab, name: name.trim() })
+        }
+        await loadTabData()
+        setOpen(false)
+      } catch (err) {
+        console.error(err)
+      }
     }
-    setOpen(false)
   }
 
-  const remove = (id: string) => setItems(currentItems().filter((i: any) => i.id !== id))
+  const remove = async (id: string) => {
+    try {
+      if (tab === 'specialties') {
+        await api.delete(`/admin/specialties/${id}/`)
+      } else if (tab === 'tips') {
+        await api.delete(`/admin/health-tips/${id}/`)
+      } else {
+        await api.delete(`/admin/definitions/${id}/`)
+      }
+      await loadTabData()
+    } catch (err) {
+      console.error(err)
+    }
+  }
 
   const label = () => {
     switch (tab) {
@@ -223,6 +208,9 @@ export default function AdminDefinitions() {
       case 'allergies': return { single: 'آلرژی', plural: 'آلرژی‌ها' }
       case 'drugs': return { single: 'دارو', plural: 'داروها' }
       case 'cities': return { single: 'شهر', plural: 'شهرها' }
+      case 'insurance_type': return { single: 'نوع بیمه', plural: 'انواع بیمه درمانی' }
+      case 'supplementary_insurance': return { single: 'بیمه تکمیلی', plural: 'بیمه‌های تکمیلی' }
+      case 'prefix': return { single: 'پیشوند', plural: 'پیشوندها' }
       case 'tips': return { single: 'نکته', plural: 'نکات سلامت' }
     }
   }
@@ -243,7 +231,13 @@ export default function AdminDefinitions() {
         </PrimaryButton>
       </GlassCard>
 
-      {currentItems().length ? (
+      {loading ? (
+        <EmptyState
+          icon={<IconShield />}
+          title="در حال بارگذاری..."
+          description="لطفاً صبر کنید"
+        />
+      ) : currentItems().length ? (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {currentItems().map((item: any) => (
             <GlassCard key={item.id} hover className="flex items-start gap-4 p-4">
@@ -363,7 +357,15 @@ export default function AdminDefinitions() {
               name="name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder={`مثلاً ${tab === 'diagnoses' ? 'فشار خون' : tab === 'allergies' ? 'پنی‌سیلین' : tab === 'drugs' ? 'آسپرین' : 'تهران'}`}
+              placeholder={`مثلاً ${
+                tab === 'diagnoses' ? 'فشار خون' :
+                tab === 'allergies' ? 'پنی‌سیلین' :
+                tab === 'drugs' ? 'آسپرین' :
+                tab === 'insurance_type' ? 'تامین اجتماعی' :
+                tab === 'supplementary_insurance' ? 'مهراد' :
+                tab === 'prefix' ? 'دکتر' :
+                'تهران'
+              }`}
             />
           )}
         </div>

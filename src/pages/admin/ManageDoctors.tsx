@@ -17,9 +17,10 @@ import {
   IconShield,
   IconStethoscope,
 } from '../../components/ui/icons'
-import { doctors as seed, getSpecialty, patients, specialties } from '../../data/apiData'
+import { doctorName, getSpecialty } from '../../data/apiData'
+import { api } from '../../lib/api'
 import { cn, toFa } from '../../lib/utils'
-import type { Doctor } from '../../types'
+import type { Doctor, Patient, Specialty } from '../../types'
 
 type DocStatus = Doctor['status']
 
@@ -29,15 +30,23 @@ const statusMeta: Record<DocStatus, { tone: 'green' | 'amber' | 'red'; label: st
   suspended: { tone: 'red', label: 'معلق' },
 }
 
+function extractResults<T>(response: T | { results: T }): T {
+  if (response && typeof response === 'object' && 'results' in response) {
+    return (response as { results: T }).results
+  }
+  return response as T
+}
+
 export default function ManageDoctors() {
-  const [list, setList] = useState<Doctor[]>(seed)
+  const [list, setList] = useState<Doctor[]>([])
+  const [patients, setPatients] = useState<Patient[]>([])
+  const [specialties, setSpecialties] = useState<Specialty[]>([])
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<DocStatus | 'all'>('all')
   const [searchParams] = useSearchParams()
   const [addOpen, setAddOpen] = useState(false)
   const [verifyId, setVerifyId] = useState<string | null>(null)
 
-  // Add-doctor form
   const [step, setStep] = useState<'select' | 'documents'>('select')
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
   const [specId, setSpecId] = useState('sp-gp')
@@ -59,23 +68,43 @@ export default function ManageDoctors() {
     }
   }, [])
 
+  useEffect(() => {
+    api.get<Doctor[]>('/admin/doctors/')
+      .then((res) => setList(extractResults(res)))
+      .catch(console.error)
+
+    api.get<Patient[]>('/admin/users/')
+      .then((res) => setPatients(extractResults(res)))
+      .catch(() => {})
+
+    api.get<Specialty[]>('/doctors/specialties/', false)
+      .then((res) => setSpecialties(extractResults(res)))
+      .catch(() => {})
+  }, [])
+
   const verifyDoc = verifyId ? list.find((d) => d.id === verifyId) : null
 
   const filtered = useMemo(
     () =>
       list
         .filter((d) => (status === 'all' ? true : d.status === status))
-        .filter((d) => (q ? d.name.includes(q) : true)),
+        .filter((d) => (q ? doctorName(d).includes(q) : true)),
     [list, q, status],
   )
 
   const availableUsers = useMemo(
     () => patients.filter((p) => !list.some((d) => d.name === p.name)).slice(0, 10),
-    [list],
+    [list, patients],
   )
 
-  const setStatusOf = (id: string, s: DocStatus) =>
-    setList((arr) => arr.map((d) => (d.id === id ? { ...d, status: s } : d)))
+  const setStatusOf = async (id: string, s: DocStatus) => {
+    try {
+      await api.post(`/admin/doctors/${id}/status/`, { status: s })
+      setList((arr) => arr.map((d) => (d.id === id ? { ...d, status: s } : d)))
+    } catch (err) {
+      console.error('Failed to update doctor status', err)
+    }
+  }
 
   const resetAdd = () => {
     setStep('select')
@@ -181,7 +210,7 @@ export default function ManageDoctors() {
                         <div className="flex items-center gap-3">
                           <Avatar src={d.avatar} size="sm" ring />
                           <div className="min-w-0">
-                            <p className="truncate font-semibold text-ink-800">{d.name}</p>
+                            <p className="truncate font-semibold text-ink-800">{doctorName(d)}</p>
                             <p className="truncate text-[11px] text-ink-400">{d.phone}</p>
                           </div>
                         </div>
@@ -438,7 +467,7 @@ export default function ManageDoctors() {
             <div className="flex items-center gap-4">
               <Avatar src={verifyDoc.avatar} size="lg" ring />
               <div>
-                <p className="font-bold text-ink-800">{verifyDoc.name}</p>
+                <p className="font-bold text-ink-800">{doctorName(verifyDoc)}</p>
                 <p className="text-sm text-primary-600">{getSpecialty(verifyDoc.specialtyId)?.name}</p>
                 <p className="text-xs text-ink-400">{verifyDoc.hospital} • {verifyDoc.city}</p>
               </div>

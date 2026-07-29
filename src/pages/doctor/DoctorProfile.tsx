@@ -30,7 +30,11 @@ import {
 import { api, apiRequest } from "../../lib/api";
 import { refreshBackendData } from "../../data/apiData";
 import { cn, formatToman, toFa } from "../../lib/utils";
-import type { ConsultType, CommunicationSettings, WorkingHourSlot } from "../../types";
+import type {
+  ConsultType,
+  CommunicationSettings,
+  WorkingHourSlot,
+} from "../../types";
 
 type CommState = Record<ConsultType, { enabled: boolean; fee: number }>;
 
@@ -62,10 +66,26 @@ const commLabels: Record<
 };
 
 const tabs = [
-  { key: "profile", label: "پروفایل حرفه‌ای", icon: <IconUser className="h-4 w-4" /> },
-  { key: "payment", label: "اطلاعات پرداخت", icon: <IconWallet className="h-4 w-4" /> },
-  { key: "hours", label: "ساعات کاری", icon: <IconClock className="h-4 w-4" /> },
-  { key: "comm", label: "قابلیت‌های ارتباطی", icon: <IconChat className="h-4 w-4" /> },
+  {
+    key: "profile",
+    label: "پروفایل",
+    icon: <IconUser className="h-4 w-4" />,
+  },
+  {
+    key: "payment",
+    label: "اطلاعات پرداخت",
+    icon: <IconWallet className="h-4 w-4" />,
+  },
+  {
+    key: "hours",
+    label: "ساعات کاری",
+    icon: <IconClock className="h-4 w-4" />,
+  },
+  {
+    key: "comm",
+    label: "قابلیت‌های ارتباطی",
+    icon: <IconChat className="h-4 w-4" />,
+  },
 ] as const;
 
 type TabKey = (typeof tabs)[number]["key"];
@@ -77,7 +97,7 @@ export default function DoctorProfile() {
   const [saving, setSaving] = useState(false);
   const avatarInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
-  const [avatarSrc, setAvatarSrc] = useState(me.avatar);
+  const [avatarSrc, setAvatarSrc] = useState(me?.avatar);
 
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -85,33 +105,59 @@ export default function DoctorProfile() {
     setAvatarUploading(true);
     try {
       const form = new FormData();
-      form.append('avatar', file);
-      const res = await apiRequest<{ avatar: string }>('/auth/me/', {
-        method: 'PATCH',
+      form.append("avatar", file);
+      const res = await apiRequest<{ avatar: string }>("/doctors/me/", {
+        method: "PATCH",
         body: form,
       });
       setAvatarSrc(res.avatar);
+      refreshBackendData("doctor");
     } catch {
-      alert('خطا در آپلود عکس');
+      alert("خطا در آپلود عکس");
     } finally {
       setAvatarUploading(false);
     }
   };
 
   useEffect(() => {
-    refreshBackendData('doctor');
+    refreshBackendData("doctor");
   }, []);
 
   useEffect(() => {
-    setAvatarSrc(me.avatar);
-  }, [me.avatar]);
+    setAvatarSrc(me?.avatar);
+  }, [me?.avatar]);
 
-  if (!me) return <div className="p-10 text-center text-ink-500">در حال بارگذاری...</div>;
+  const [defOptions, setDefOptions] = useState<Record<string, { id: string; name: string }[]>>({});
+
+  useEffect(() => {
+    const fetchDefs = async () => {
+      try {
+        const types = ['prefix', 'city'];
+        const results = await Promise.all(
+          types.map(async (t) => {
+            const data = await api.get<{ id: string; name: string }[]>(`/admin/definitions/?type=${t}`);
+            return [t, data] as [string, { id: string; name: string }[]];
+          })
+        );
+        setDefOptions(Object.fromEntries(results));
+      } catch { /* ignore */ }
+    };
+    fetchDefs();
+  }, []);
+
+  if (!me)
+    return (
+      <div className="p-10 text-center text-ink-500">در حال بارگذاری...</div>
+    );
 
   const specialty = getSpecialty(me.specialtyId);
 
   const [hours, setHours] = useState<WorkingHourSlot[]>(
-    me.workingHours.map((h) => ({ ...h, breakMinutes: h.breakMinutes ?? 15, appointmentDurationMinutes: h.appointmentDurationMinutes ?? 30 })),
+    me.workingHours.map((h) => ({
+      ...h,
+      breakMinutes: h.breakMinutes ?? 15,
+      appointmentDurationMinutes: h.appointmentDurationMinutes ?? 30,
+    })),
   );
   const daysOfWeek = [
     "شنبه",
@@ -130,11 +176,19 @@ export default function DoctorProfile() {
 
   const [duplicateError, setDuplicateError] = useState("");
 
-  const isOverlap = (day: string, from: string, to: string, excludeIdx?: number) =>
-    hours.some((h, i) =>
-      i !== excludeIdx &&
-      h.day === day &&
-      ((from >= h.from && from < h.to) || (to > h.from && to <= h.to) || (from <= h.from && to >= h.to))
+  const isOverlap = (
+    day: string,
+    from: string,
+    to: string,
+    excludeIdx?: number,
+  ) =>
+    hours.some(
+      (h, i) =>
+        i !== excludeIdx &&
+        h.day === day &&
+        ((from >= h.from && from < h.to) ||
+          (to > h.from && to <= h.to) ||
+          (from <= h.from && to >= h.to)),
     );
 
   const addSlot = (day: string, from: string, to: string) => {
@@ -143,25 +197,26 @@ export default function DoctorProfile() {
       return;
     }
     setDuplicateError("");
-    setHours((h) => [...h, { day, from, to, breakMinutes: 15, appointmentDurationMinutes: 30 }]);
+    setHours((h) => [
+      ...h,
+      { day, from, to, breakMinutes: 15, appointmentDurationMinutes: 30 },
+    ]);
   };
 
   const removeSlot = (idx: number) =>
     setHours((h) => h.filter((_, i) => i !== idx));
 
-  const updateSlot = (
-    idx: number,
-    patch: Partial<WorkingHourSlot>,
-  ) => {
+  const updateSlot = (idx: number, patch: Partial<WorkingHourSlot>) => {
     setHours((h) => {
       const updated = h.map((x, i) => (i === idx ? { ...x, ...patch } : x));
       const item = updated[idx];
-      const overlap = updated.some((x, i) =>
-        i !== idx &&
-        x.day === item.day &&
-        ((item.from >= x.from && item.from < x.to) ||
-         (item.to > x.from && item.to <= x.to) ||
-         (item.from <= x.from && item.to >= x.to))
+      const overlap = updated.some(
+        (x, i) =>
+          i !== idx &&
+          x.day === item.day &&
+          ((item.from >= x.from && item.from < x.to) ||
+            (item.to > x.from && item.to <= x.to) ||
+            (item.from <= x.from && item.to >= x.to)),
       );
       if (overlap) {
         setDuplicateError("این بازه با بازه‌های تعریف‌شده تداخل دارد");
@@ -173,11 +228,22 @@ export default function DoctorProfile() {
   };
 
   const [comm, setComm] = useState<CommState>({
-    chat: { enabled: me.communication?.chat?.enabled ?? true, fee: me.communication?.chat?.fee ?? defaultFee.chat },
-    audio: { enabled: me.communication?.audio?.enabled ?? true, fee: me.communication?.audio?.fee ?? defaultFee.audio },
-    video: { enabled: me.communication?.video?.enabled ?? true, fee: me.communication?.video?.fee ?? defaultFee.video },
+    chat: {
+      enabled: me.communication?.chat?.enabled ?? true,
+      fee: me.communication?.chat?.fee ?? defaultFee.chat,
+    },
+    audio: {
+      enabled: me.communication?.audio?.enabled ?? true,
+      fee: me.communication?.audio?.fee ?? defaultFee.audio,
+    },
+    video: {
+      enabled: me.communication?.video?.enabled ?? true,
+      fee: me.communication?.video?.fee ?? defaultFee.video,
+    },
   });
-  const [chatAutoCloseMinutes, setChatAutoCloseMinutes] = useState(me.communication?.chatAutoCloseMinutes ?? 1440);
+  const [chatAutoCloseMinutes, setChatAutoCloseMinutes] = useState(
+    me.communication?.chatAutoCloseMinutes ?? 1440,
+  );
   const [commError, setCommError] = useState("");
 
   const toggleComm = (type: ConsultType) => {
@@ -200,7 +266,7 @@ export default function DoctorProfile() {
   };
 
   const [name, setName] = useState(me.name);
-  const [email, setEmail] = useState(me.email || "");
+  const [prefix, setPrefix] = useState(me.prefix || "دکتر");
   const [selectedSpecialty, setSelectedSpecialty] = useState(me.specialtyId);
   const [city, setCity] = useState(me.city);
   const [hospital, setHospital] = useState(me.hospital);
@@ -225,18 +291,28 @@ export default function DoctorProfile() {
     setSaving(true);
     try {
       await Promise.all([
-        api.patch('/doctors/me/', {
-          name, email, specialtyId: selectedSpecialty, city, hospital, bio,
-          cardNumber, accountNumber, shaba,
+        api.patch("/doctors/me/", {
+          name,
+          prefix,
+          specialtyId: selectedSpecialty,
+          city,
+          hospital,
+          bio,
+          cardNumber,
+          accountNumber,
+          shaba,
         }),
-        api.patch('/doctors/me/communication/', {
-          chat: comm.chat, audio: comm.audio, video: comm.video,
+        api.put("/doctors/me/communication/", {
+          chat: comm.chat,
+          audio: comm.audio,
+          video: comm.video,
           chatAutoCloseMinutes,
         }),
+        api.put("/doctors/me/working-hours/", hours),
       ]);
-      await refreshBackendData('doctor');
+      await refreshBackendData("doctor");
     } catch (e) {
-      alert('خطا در ذخیره اطلاعات');
+      alert("خطا در ذخیره اطلاعات");
     } finally {
       setSaving(false);
     }
@@ -256,29 +332,67 @@ export default function DoctorProfile() {
               <IconLogout />
             </button>
           </div>
-          <div className="relative cursor-pointer group" onClick={() => avatarInputRef.current?.click()}>
+          <div
+            className="relative cursor-pointer group"
+            onClick={() => avatarInputRef.current?.click()}
+          >
             <div className="transition-opacity group-hover:opacity-75">
               <Avatar src={avatarSrc} size="xl" ring />
             </div>
             <div className="absolute inset-0 flex items-center justify-center rounded-full opacity-0 group-hover:opacity-100 transition-opacity">
               <div className="rounded-full bg-black/40 p-2 text-white">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 13a3 3 0 11-6 0 3 3 0 016 0z" />
+                <svg
+                  className="h-5 w-5"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M3 9a2 2 0 012-2h.93a2 2 0 001.664-.89l.812-1.22A2 2 0 0110.07 4h3.86a2 2 0 011.664.89l.812 1.22A2 2 0 0018.07 7H19a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V9z"
+                  />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15 13a3 3 0 11-6 0 3 3 0 016 0z"
+                  />
                 </svg>
               </div>
             </div>
             {avatarUploading && (
               <div className="absolute inset-0 flex items-center justify-center rounded-full bg-black/30">
-                <svg className="h-6 w-6 animate-spin text-white" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                <svg
+                  className="h-6 w-6 animate-spin text-white"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
                 </svg>
               </div>
             )}
           </div>
-          <input ref={avatarInputRef} type="file" className="hidden" accept="image/*" onChange={handleAvatarChange} />
-          <h2 className="mt-4 text-lg font-bold text-ink-800">{me.name}</h2>
+          <input
+            ref={avatarInputRef}
+            type="file"
+            className="hidden"
+            accept="image/*"
+            onChange={handleAvatarChange}
+          />
+          <h2 className="mt-4 text-lg font-bold text-ink-800">{me.prefix || 'دکتر'} {me.name}</h2>
           <p className="text-sm text-primary-600">
             {specialty?.icon} {specialty?.name}
           </p>
@@ -335,8 +449,6 @@ export default function DoctorProfile() {
             </PrimaryButton>
           </div>
         </GlassCard>
-
-      
       </div>
 
       {/* Main content with tabs */}
@@ -348,26 +460,63 @@ export default function DoctorProfile() {
         {activeTab === "profile" && (
           <ProfileTab
             me={me}
-            name={name} setName={setName}
-            email={email} setEmail={setEmail}
-            selectedSpecialty={selectedSpecialty} setSelectedSpecialty={setSelectedSpecialty}
-            city={city} setCity={setCity}
-            hospital={hospital} setHospital={setHospital}
-            bio={bio} setBio={setBio}
+            name={name}
+            setName={setName}
+            prefix={prefix}
+            setPrefix={setPrefix}
+            selectedSpecialty={selectedSpecialty}
+            setSelectedSpecialty={setSelectedSpecialty}
+            city={city}
+            setCity={setCity}
+            hospital={hospital}
+            setHospital={setHospital}
+            bio={bio}
+            setBio={setBio}
+            defOptions={defOptions}
           />
         )}
         {activeTab === "payment" && (
-          <PaymentTab cardNumber={cardNumber} setCardNumber={setCardNumber} accountNumber={accountNumber} setAccountNumber={setAccountNumber} shaba={shaba} setShaba={setShaba} />
+          <PaymentTab
+            cardNumber={cardNumber}
+            setCardNumber={setCardNumber}
+            accountNumber={accountNumber}
+            setAccountNumber={setAccountNumber}
+            shaba={shaba}
+            setShaba={setShaba}
+          />
         )}
         {activeTab === "hours" && (
-          <HoursTab hours={hours} setHours={setHours} hoursByDay={hoursByDay} daysOfWeek={daysOfWeek} duplicateError={duplicateError} addSlot={addSlot} removeSlot={removeSlot} updateSlot={updateSlot} />
+          <HoursTab
+            hours={hours}
+            setHours={setHours}
+            hoursByDay={hoursByDay}
+            daysOfWeek={daysOfWeek}
+            duplicateError={duplicateError}
+            addSlot={addSlot}
+            removeSlot={removeSlot}
+            updateSlot={updateSlot}
+          />
         )}
         {activeTab === "comm" && (
-          <CommTab comm={comm} setComm={setComm} commError={commError} toggleComm={toggleComm} setCommFee={setCommFee} chatAutoCloseMinutes={chatAutoCloseMinutes} setChatAutoCloseMinutes={setChatAutoCloseMinutes} />
+          <CommTab
+            comm={comm}
+            setComm={setComm}
+            commError={commError}
+            toggleComm={toggleComm}
+            setCommFee={setCommFee}
+            chatAutoCloseMinutes={chatAutoCloseMinutes}
+            setChatAutoCloseMinutes={setChatAutoCloseMinutes}
+          />
         )}
 
         <div className="mt-6 flex justify-end gap-3">
-          <PrimaryButton icon={<IconCheck />} onClick={saveAll} disabled={saving}>{saving ? 'در حال ذخیره...' : 'ذخیره تغییرات'}</PrimaryButton>
+          <PrimaryButton
+            icon={<IconCheck />}
+            onClick={saveAll}
+            disabled={saving}
+          >
+            {saving ? "در حال ذخیره..." : "ذخیره تغییرات"}
+          </PrimaryButton>
         </div>
       </GlassCard>
 
@@ -386,7 +535,10 @@ export default function DoctorProfile() {
             >
               تأیید و ثبت
             </PrimaryButton>
-            <PrimaryButton variant="ghost" onClick={() => setWithdrawOpen(false)}>
+            <PrimaryButton
+              variant="ghost"
+              onClick={() => setWithdrawOpen(false)}
+            >
               انصراف
             </PrimaryButton>
           </>
@@ -394,12 +546,16 @@ export default function DoctorProfile() {
       >
         <div className="space-y-4">
           <p className="text-sm text-ink-600">
-            مبلغ <b className="text-ink-800">{formatToman(doctorEarnings.pending)}</b> به شماره شبا زیر واریز می‌شود:
+            مبلغ{" "}
+            <b className="text-ink-800">
+              {formatToman(doctorEarnings.pending)}
+            </b>{" "}
+            به شماره شبا زیر واریز می‌شود:
           </p>
           <div className="rounded-xl bg-primary-50/60 p-4 text-center">
             <p className="text-xs text-ink-400 mb-1">شماره شبا</p>
             <p className="font-bold tabular text-ink-800" dir="ltr">
-              {shaba || 'هنوز ثبت نشده'}
+              {shaba || "هنوز ثبت نشده"}
             </p>
           </div>
           {!shaba && (
@@ -408,7 +564,8 @@ export default function DoctorProfile() {
             </p>
           )}
           <p className="text-xs text-ink-400">
-            با تأیید، درخواست برداشت شما ثبت می‌شود و پس از بررسی مدیریت، واریز انجام می‌گیرد.
+            با تأیید، درخواست برداشت شما ثبت می‌شود و پس از بررسی مدیریت، واریز
+            انجام می‌گیرد.
           </p>
         </div>
       </Modal>
@@ -419,26 +576,38 @@ export default function DoctorProfile() {
 // Tab components
 function ProfileTab({
   me,
-  name, setName,
-  email, setEmail,
-  selectedSpecialty, setSelectedSpecialty,
-  city, setCity,
-  hospital, setHospital,
-  bio, setBio,
+  name,
+  setName,
+  prefix,
+  setPrefix,
+  selectedSpecialty,
+  setSelectedSpecialty,
+  city,
+  setCity,
+  hospital,
+  setHospital,
+  bio,
+  setBio,
+  defOptions,
 }: {
-  me: typeof doctors[0];
-  name: string; setName: (v: string) => void;
-  email: string; setEmail: (v: string) => void;
-  selectedSpecialty: string; setSelectedSpecialty: (v: string) => void;
-  city: string; setCity: (v: string) => void;
-  hospital: string; setHospital: (v: string) => void;
-  bio: string; setBio: (v: string) => void;
+  me: (typeof doctors)[0];
+  name: string;
+  setName: (v: string) => void;
+  prefix: string;
+  setPrefix: (v: string) => void;
+  selectedSpecialty: string;
+  setSelectedSpecialty: (v: string) => void;
+  city: string;
+  setCity: (v: string) => void;
+  hospital: string;
+  setHospital: (v: string) => void;
+  bio: string;
+  setBio: (v: string) => void;
+  defOptions: Record<string, { id: string; name: string }[]>;
 }) {
   return (
     <div className="space-y-6 mt-4">
-      <p className="text-xs text-ink-400">
-        اطلاعات تخصصی، آدرس و لوکیشن مطب.
-      </p>
+      <p className="text-xs text-ink-400">اطلاعات تخصصی، آدرس و لوکیشن مطب.</p>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <InputField
@@ -455,14 +624,16 @@ function ProfileTab({
           name="phone"
           readOnly
         />
-        <InputField
-          label="ایمیل"
-          dir="ltr"
-          className="text-right"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          name="email"
-        />
+        <SelectField
+          label="پیشوند"
+          value={prefix}
+          onChange={(e) => setPrefix(e.target.value)}
+          name="prefix"
+        >
+          {(defOptions.prefix || []).map((p) => (
+            <option key={p.id} value={p.name}>{p.name}</option>
+          ))}
+        </SelectField>
         <SelectField
           label="تخصص"
           value={selectedSpecialty}
@@ -475,7 +646,15 @@ function ProfileTab({
             </option>
           ))}
         </SelectField>
-        <InputField label="شهر" value={city} onChange={(e) => setCity(e.target.value)} name="city" />
+        <SelectField
+          label="شهر"
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+          name="city"
+        >
+          <option value="">انتخاب کنید</option>
+          {(defOptions.city || []).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+        </SelectField>
         <InputField
           label="بیمارستان / مطب"
           value={hospital}
@@ -516,9 +695,7 @@ function PaymentTab({
 }) {
   return (
     <div className="space-y-4 mt-4">
-      <p className="text-xs text-ink-400">
-        اطلاعات بانکی برای واریز درآمدها.
-      </p>
+      <p className="text-xs text-ink-400">اطلاعات بانکی برای واریز درآمدها.</p>
       <div className="space-y-4">
         <InputField
           label="شماره کارت"
@@ -552,6 +729,9 @@ function PaymentTab({
   );
 }
 
+const BREAK_OPTIONS = [0, 5, 10, 15, 20, 30, 45, 60];
+const DURATION_OPTIONS = [5, 10, 15, 20, 30, 45, 60, 90, 120];
+
 function HoursTab({
   hours,
   setHours,
@@ -571,6 +751,20 @@ function HoursTab({
   removeSlot: (idx: number) => void;
   updateSlot: (idx: number, patch: Partial<WorkingHourSlot>) => void;
 }) {
+  const [selectedDays, setSelectedDays] = useState<string[]>([]);
+  const [bulkFrom, setBulkFrom] = useState("08:00");
+  const [bulkTo, setBulkTo] = useState("10:00");
+
+  const toggleDay = (day: string) =>
+    setSelectedDays((prev) =>
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+    );
+
+  const addBulk = () => {
+    if (bulkFrom >= bulkTo) return;
+    selectedDays.forEach((day) => addSlot(day, bulkFrom, bulkTo));
+  };
+
   return (
     <div className="space-y-4 mt-4">
       <p className="text-xs text-ink-400">
@@ -581,24 +775,70 @@ function HoursTab({
         <p className="mb-2 text-xs text-red-500">{duplicateError}</p>
       )}
 
+      {/* Bulk add section */}
+      <div className="rounded-2xl border border-primary-200 bg-primary-50/40 p-4">
+        <p className="mb-3 text-sm font-medium text-ink-700">
+          افزودن بازه به چند روز simultaneously
+        </p>
+        <div className="mb-3 flex flex-wrap gap-2">
+          {daysOfWeek.map((day) => (
+            <label
+              key={day}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-lg border px-3 py-1.5 text-xs transition ${
+                selectedDays.includes(day)
+                  ? "border-primary-400 bg-primary-100 text-primary-800"
+                  : "border-white/50 bg-white/50 text-ink-600"
+              }`}
+            >
+              <input
+                type="checkbox"
+                checked={selectedDays.includes(day)}
+                onChange={() => toggleDay(day)}
+                className="hidden"
+              />
+              {day}
+            </label>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-xs text-ink-400">از</span>
+          <input
+            type="time"
+            value={bulkFrom}
+            onChange={(e) => setBulkFrom(e.target.value)}
+            className="rounded-lg border border-white/50 bg-white/50 px-2 py-1.5 text-sm tabular text-ink-700 outline-none"
+          />
+          <span className="text-xs text-ink-400">تا</span>
+          <input
+            type="time"
+            value={bulkTo}
+            onChange={(e) => setBulkTo(e.target.value)}
+            className="rounded-lg border border-white/50 bg-white/50 px-2 py-1.5 text-sm tabular text-ink-700 outline-none"
+          />
+          <button
+            onClick={addBulk}
+            disabled={selectedDays.length === 0}
+            className="flex items-center gap-1 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-600 disabled:opacity-50 active:scale-[.97]"
+          >
+            <IconPlus className="h-3.5 w-3.5" />
+            افزودن به {selectedDays.length} روز
+          </button>
+        </div>
+      </div>
+
       <div className="space-y-3">
         {hoursByDay.map(({ day, slots }) => {
           const slotIdxs = slots
             .map((s) => hours.indexOf(s))
             .filter((i) => i >= 0);
           return (
-            <div
-              key={day}
-              className="glass-soft rounded-2xl overflow-hidden"
-            >
+            <div key={day} className="glass-soft rounded-2xl overflow-hidden">
               <div className="flex items-center justify-between bg-white/30 px-4 py-2.5">
                 <span className="text-sm font-semibold text-ink-700">
                   {day}
                 </span>
                 <span className="text-[11px] text-ink-400 tabular">
-                  {slots.length > 0
-                    ? slots.length + " بازه"
-                    : "تعریف نشده"}
+                  {slots.length > 0 ? slots.length + " بازه" : "تعریف نشده"}
                 </span>
               </div>
 
@@ -640,18 +880,19 @@ function HoursTab({
                           <span className="text-[11px] text-ink-400">
                             استراحت:
                           </span>
-                          <input
-                            type="number"
-                            min={0}
-                            max={60}
+                          <select
                             value={hours[idx].breakMinutes}
                             onChange={(e) =>
                               updateSlot(idx, {
-                                breakMinutes: Math.max(0, Number(e.target.value)),
+                                breakMinutes: Number(e.target.value),
                               })
                             }
-                            className="w-16 rounded-lg border border-white/50 bg-white/50 px-2 py-1 text-center text-xs tabular text-ink-700 outline-none"
-                          />
+                            className="rounded-lg border border-white/50 bg-white/50 px-2 py-1 text-xs tabular text-ink-700 outline-none"
+                          >
+                            {BREAK_OPTIONS.map((v) => (
+                              <option key={v} value={v}>{v}</option>
+                            ))}
+                          </select>
                           <span className="text-[11px] text-ink-400">
                             دقیقه
                           </span>
@@ -660,18 +901,19 @@ function HoursTab({
                           <span className="text-[11px] text-ink-400">
                             مدت ویزیت:
                           </span>
-                          <input
-                            type="number"
-                            min={5}
-                            max={180}
+                          <select
                             value={hours[idx].appointmentDurationMinutes ?? 30}
                             onChange={(e) =>
                               updateSlot(idx, {
-                                appointmentDurationMinutes: Math.max(5, Number(e.target.value)),
+                                appointmentDurationMinutes: Number(e.target.value),
                               })
                             }
-                            className="w-16 rounded-lg border border-white/50 bg-white/50 px-2 py-1 text-center text-xs tabular text-ink-700 outline-none"
-                          />
+                            className="rounded-lg border border-white/50 bg-white/50 px-2 py-1 text-xs tabular text-ink-700 outline-none"
+                          >
+                            {DURATION_OPTIONS.map((v) => (
+                              <option key={v} value={v}>{v}</option>
+                            ))}
+                          </select>
                           <span className="text-[11px] text-ink-400">
                             دقیقه
                           </span>
@@ -760,9 +1002,7 @@ function CommTab({
                 <span
                   className={cn(
                     "inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
-                    comm[type].enabled
-                      ? "-translate-x-6"
-                      : "-translate-x-1",
+                    comm[type].enabled ? "-translate-x-6" : "-translate-x-1",
                   )}
                 />
               </button>
@@ -816,17 +1056,20 @@ function CommTab({
             min={0}
             max={43200}
             value={chatAutoCloseMinutes}
-            onChange={(e) => setChatAutoCloseMinutes(Math.max(0, Number(e.target.value)))}
+            onChange={(e) =>
+              setChatAutoCloseMinutes(Math.max(0, Number(e.target.value)))
+            }
             className="w-20 rounded-lg border border-white/50 bg-white/50 px-2 py-1.5 text-center text-sm tabular text-ink-700 outline-none"
           />
           <span className="text-xs text-ink-400">دقیقه</span>
-          <span className="text-xs text-ink-400 mx-1">({Math.floor(chatAutoCloseMinutes / 1440)} روز {Math.floor((chatAutoCloseMinutes % 1440) / 60)} ساعت)</span>
+          <span className="text-xs text-ink-400 mx-1">
+            ({Math.floor(chatAutoCloseMinutes / 1440)} روز{" "}
+            {Math.floor((chatAutoCloseMinutes % 1440) / 60)} ساعت)
+          </span>
         </div>
       </div>
 
-      {commError && (
-        <p className="mt-2 text-xs text-red-500">{commError}</p>
-      )}
+      {commError && <p className="mt-2 text-xs text-red-500">{commError}</p>}
     </div>
   );
 }
@@ -857,8 +1100,8 @@ function SlotAdder({
       />
       <button
         onClick={() => {
-          if (from >= to) return
-          onAdd(day, from, to)
+          if (from >= to) return;
+          onAdd(day, from, to);
         }}
         className="flex items-center gap-1 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-600 active:scale-[.97]"
       >

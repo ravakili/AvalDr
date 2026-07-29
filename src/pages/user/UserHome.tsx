@@ -23,7 +23,7 @@ import {
 import { formatDateFa, relativeDay, shortDateFa, toFa } from '../../lib/utils'
 import { useAuthStore } from '../../store/authStore'
 import { useUserStore } from '../../store/userStore'
-import { getDoctor } from '../../data/apiData'
+import { doctorName, getDoctor, prescriptions } from '../../data/apiData'
 import type { Appointment } from '../../types'
 
 export default function UserHome() {
@@ -135,7 +135,7 @@ export default function UserHome() {
             <div>
               <p className="text-xs text-ink-400">شمارش معکوس تا نوبت بعدی</p>
               <p className="font-bold text-ink-800">
-                {getDoctor(nextAppt.doctorId)?.name || ''} •{' '}
+                {doctorName(getDoctor(nextAppt.doctorId))} •{' '}
                 <span className="tabular">{toFa(nextAppt.time)}</span>
               </p>
               <p className="text-xs text-ink-500">
@@ -158,7 +158,7 @@ export default function UserHome() {
           </div>
         </GlassCard>
       )}
-
+{/* 
       {todayAppts.length > 0 && (
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           {todayAppts.slice(0, 4).map((a) => {
@@ -167,7 +167,7 @@ export default function UserHome() {
               <GlassCard key={a.id} hover className="flex items-center gap-3 p-4" onClick={() => navigate(`/user/consult/${a.id}`)}>
                 <Avatar src={doc?.avatar} size="md" ring />
                 <div className="min-w-0 flex-1">
-                  <p className="truncate font-semibold text-ink-800">{doc?.name || 'پزشک'}</p>
+                  <p className="truncate font-semibold text-ink-800">{doctorName(doc) || 'پزشک'}</p>
                   <p className="text-xs text-ink-400">{a.reason}</p>
                 </div>
                 <StatusBadge status={a.status} />
@@ -175,7 +175,7 @@ export default function UserHome() {
             )
           })}
         </div>
-      )}
+      )} */}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <GlassCard className="p-6 lg:col-span-2">
@@ -200,12 +200,13 @@ export default function UserHome() {
               return (
                 <div
                   key={a.id}
-                  className="group flex flex-wrap items-center gap-4 rounded-2xl border border-white/50 bg-white/40 p-3 transition hover:bg-white/60"
+                  className="group flex flex-wrap items-center gap-4 rounded-2xl border border-white/50 bg-white/40 p-3 transition hover:bg-white/60 hover:cursor-pointer"
+                  onClick={() => navigate(`/user/consult/${a.id}`)}
                 >
                   <Avatar src={doc?.avatar} size="md" ring />
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
-                      <p className="truncate font-semibold text-ink-800">{doc?.name || 'پزشک'}</p>
+                      <p className="truncate font-semibold text-ink-800">{doctorName(doc) || 'پزشک'}</p>
                       <StatusBadge status={a.status} />
                     </div>
                     <p className="truncate text-xs text-ink-400">
@@ -274,11 +275,41 @@ export default function UserHome() {
               <IconPrescription className="h-5 w-5 text-primary-500" />
               <h3 className="font-bold text-ink-800">نسخه‌های اخیر</h3>
             </div>
+            <Link to="/user/appointments">
+              <PrimaryButton size="sm" variant="ghost">
+                مشاهده همه
+              </PrimaryButton>
+            </Link>
           </div>
           <div className="space-y-3">
-            <p className="py-6 text-center text-sm text-ink-400">
-              برای مشاهده نسخه‌ها به صفحه نوبت‌ها مراجعه کنید.
-            </p>
+            {prescriptions
+              .filter((p) => p.patientId === (profile?.id || ''))
+              .slice(0, 5).map((rx) => {
+                const doc = getDoctor(rx.doctorId)
+                return (
+                  <div
+                    key={rx.id}
+                    className="rounded-2xl border border-white/50 bg-white/40 p-3 transition hover:bg-white/60"
+                  >
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs font-semibold text-ink-700">{doctorName(doc) || 'پزشک'}</p>
+                      <p className="text-[10px] text-ink-400 tabular">{shortDateFa(rx.createdAt)}</p>
+                    </div>
+                    <div className="space-y-1">
+                      {rx.items.map((item, i) => (
+                        <p key={i} className="text-xs text-ink-600">
+                          💊 {item.drug} — {item.usage}
+                        </p>
+                      ))}
+                    </div>
+                  </div>
+                )
+              })}
+            {prescriptions.filter((p) => p.patientId === (profile?.id || '')).length === 0 && (
+              <p className="py-6 text-center text-sm text-ink-400">
+                برای مشاهده نسخه‌ها به صفحه نوبت‌ها مراجعه کنید.
+              </p>
+            )}
           </div>
         </GlassCard>
 
@@ -289,7 +320,7 @@ export default function UserHome() {
               <h3 className="font-bold text-ink-800">گزارش‌های پزشکی</h3>
             </div>
             <Link to="/user/profile">
-              <PrimaryButton size="sm" variant="ghost" icon={<IconPlus className="h-4 w-4" />}>
+              <PrimaryButton size="sm" variant="ghost">
                 مدیریت گزارش‌ها
               </PrimaryButton>
             </Link>

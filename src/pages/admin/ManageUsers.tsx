@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import GlassCard from '../../components/ui/GlassCard'
 import Avatar from '../../components/ui/Avatar'
 import Badge from '../../components/ui/Badge'
@@ -12,18 +12,37 @@ import {
   IconUsers,
 } from '../../components/ui/icons'
 import { cn, toFa } from '../../lib/utils'
-import { patients } from '../../data/apiData'
+import { api } from '../../lib/api'
 import type { Patient } from '../../types'
+
+interface User extends Patient {
+  suspended?: boolean
+}
+
+function extractResults<T>(response: T | { results: T }): T {
+  if (response && typeof response === 'object' && 'results' in response) {
+    return (response as { results: T }).results
+  }
+  return response as T
+}
 
 export default function ManageUsers() {
   const [q, setQ] = useState('')
-  const [list, setList] = useState(patients.map((p) => ({ ...p, suspended: false })))
+  const [list, setList] = useState<User[]>([])
+  const [loading, setLoading] = useState(true)
   const [selected, setSelected] = useState<string[]>([])
   const [bulkOpen, setBulkOpen] = useState(false)
-  const [profileUser, setProfileUser] = useState<(Patient & { suspended?: boolean }) | null>(null)
+  const [profileUser, setProfileUser] = useState<User | null>(null)
+
+  useEffect(() => {
+    api.get<User[]>('/admin/users/')
+      .then((data) => setList(extractResults(data)))
+      .catch(console.error)
+      .finally(() => setLoading(false))
+  }, [])
 
   const filtered = useMemo(
-    () => list.filter((p) => (q ? p.name.includes(q) || p.phone.includes(q) || (p.email || '').includes(q) : true)),
+    () => list.filter((p) => (q ? p.name.includes(q) || p.phone.includes(q) : true)),
     [list, q],
   )
 
@@ -32,20 +51,36 @@ export default function ManageUsers() {
   const toggleAll = () =>
     setSelected(selected.length === filtered.length ? [] : filtered.map((p) => p.id))
 
-  const toggleSuspend = (id: string) => {
-    setList((arr) => arr.map((p) => (p.id === id ? { ...p, suspended: !p.suspended } : p)))
+  const toggleSuspend = async (id: string) => {
+    const user = list.find((u) => u.id === id)
+    if (!user) return
+    const endpoint = user.suspended
+      ? `/admin/users/${id}/activate/`
+      : `/admin/users/${id}/suspend/`
+    try {
+      await api.post(endpoint)
+      setList((arr) => arr.map((p) => (p.id === id ? { ...p, suspended: !p.suspended } : p)))
+    } catch (err) {
+      console.error(err)
+    }
   }
 
-  const bulkSuspend = () => {
-    setList((arr) => arr.map((p) => (selected.includes(p.id) ? { ...p, suspended: true } : p)))
+  const bulkSuspend = async () => {
     setBulkOpen(false)
+    const ids = [...selected]
     setSelected([])
+    try {
+      await Promise.all(ids.map((id) => api.post(`/admin/users/${id}/suspend/`)))
+      setList((arr) => arr.map((p) => (ids.includes(p.id) ? { ...p, suspended: true } : p)))
+    } catch (err) {
+      console.error(err)
+    }
   }
 
   const exportCsv = () => {
     const rows = [
-      ['نام', 'تلفن', 'ایمیل', 'کد ملی', 'شهر', 'سن'],
-      ...filtered.map((p) => [p.name, p.phone, p.email || '', p.nationalId, p.city, String(p.age)]),
+      ['نام', 'تلفن', 'کد ملی', 'شهر', 'سن'],
+      ...filtered.map((p) => [p.name, p.phone, p.nationalId, p.city, String(p.age)]),
     ]
     const csv = rows.map((r) => r.map((c) => `"${c}"`).join(',')).join('\n')
     const blob = new Blob(['\uFEFF' + csv], { type: 'text/csv;charset=utf-8;' })
@@ -55,6 +90,14 @@ export default function ManageUsers() {
     a.download = 'users.csv'
     a.click()
     URL.revokeObjectURL(url)
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20 text-ink-400">
+        در حال بارگذاری…
+      </div>
+    )
   }
 
   return (
@@ -201,7 +244,8 @@ export default function ManageUsers() {
               <ProfileInfo label="کد ملی" value={toFa(profileUser.nationalId)} />
               <ProfileInfo label="سن" value={toFa(profileUser.age)} />
               <ProfileInfo label="شهر" value={profileUser.city} />
-              <ProfileInfo label="ایمیل" value={profileUser.email || '—'} />
+              <ProfileInfo label="نوع بیمه" value={profileUser.insuranceType || '—'} />
+              <ProfileInfo label="بیمه تکمیلی" value={profileUser.supplementaryInsurance || '—'} />
               {profileUser.medicalHistory && (
                 <>
                   <ProfileInfo label="تشخیص‌ها" value={profileUser.medicalHistory.diagnoses?.join('، ') || '—'} />

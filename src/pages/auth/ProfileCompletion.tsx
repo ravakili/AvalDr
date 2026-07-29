@@ -6,7 +6,10 @@ import InputField, { SelectField } from "../../components/ui/InputField";
 import Toggle from "../../components/ui/Toggle";
 import { cn, toFa } from "../../lib/utils";
 import type { UploadingFile } from "../../types";
-import { ArrowBigRight, ArrowRightFromLine } from "lucide-react";
+import DatePicker from 'react-multi-date-picker'
+import persian from 'react-date-object/calendars/persian'
+import persian_fa from 'react-date-object/locales/persian_fa'
+import type { Value } from 'react-multi-date-picker'
 import { MdOutlineKeyboardArrowRight } from "react-icons/md";
 
 const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
@@ -28,7 +31,12 @@ export default function ProfileCompletion() {
 
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [allergyInput, setAllergyInput] = useState("");
+  const [allergySelect, setAllergySelect] = useState("");
   const [conditionInput, setConditionInput] = useState("");
+  const [conditionSelect, setConditionSelect] = useState("");
+
+  const allergyOptions = ["پنی‌سیلین", "سولفونامید", "گلوتن", "گرده گل", "آسپرین", "لاکتوز", "بادام زمینی"];
+  const conditionOptions = ["فشار خون بالا", "دیابت نوع ۲", "چربی خون", "میگرن مزمن", "کم‌خونی", "آسم", "دیابت بارداری"];
 
   // Inline document upload state
   const docCancelRef = useRef<Record<string, () => void>>({});
@@ -153,7 +161,20 @@ export default function ProfileCompletion() {
   const validateStep1 = () => {
     const e: Record<string, string> = {};
     if (!userData.name.trim()) e.name = "نام و نام خانوادگی الزامی است";
-    if (!userData.dateOfBirth) e.dateOfBirth = "تاریخ تولد الزامی است";
+    setErrors(e);
+    return Object.keys(e).length === 0;
+  };
+
+  const validateStep2 = () => {
+    const e: Record<string, string> = {};
+    if (isDoctor) {
+      const required = docFields.filter(f => f.required);
+      for (const field of required) {
+        if (!docFiles[field.key]?.some(f => f.status === 'uploaded')) {
+          e[field.key] = `بارگذاری ${field.label} الزامی است`;
+        }
+      }
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -170,7 +191,7 @@ export default function ProfileCompletion() {
 
   const next = () => {
     if (step === 1 && validateStep1()) setStep(2);
-    else if (step === 2) setStep(3);
+    else if (step === 2 && validateStep2()) setStep(3);
     else if (step === 3 && validateStep3()) {
       completeProfile();
     }
@@ -187,7 +208,7 @@ export default function ProfileCompletion() {
     input: string,
     setInput: (v: string) => void,
   ) => {
-    const trimmed = value.trim();
+    const trimmed = (value || input).trim();
     if (!trimmed) return;
     const current = userData[field];
     if (!current.includes(trimmed)) {
@@ -271,27 +292,27 @@ export default function ProfileCompletion() {
                 error={errors.name}
               />
 
-              <InputField
-                label="ایمیل"
-                name="email"
-                type="email"
-                placeholder="example@email.com"
-                dir="ltr"
-                value={userData.email}
-                onChange={(e) => setUserData({ email: e.target.value })}
-              />
-
-              <InputField
-                label="تاریخ تولد *"
-                name="dateOfBirth"
-                type="date"
-                value={userData.dateOfBirth}
-                onChange={(e) => {
-                  setUserData({ dateOfBirth: e.target.value });
-                  setErrors((prev) => ({ ...prev, dateOfBirth: "" }));
-                }}
-                error={errors.dateOfBirth}
-              />
+              <div>
+                <label className="mb-1.5 block text-sm font-medium text-ink-700">تاریخ تولد</label>
+                <DatePicker
+                  value={userData.dateOfBirth || undefined}
+                  onChange={(value: Value) => {
+                    if (value && typeof value === 'object' && 'toDate' in value) {
+                      const d = (value as { toDate: () => Date }).toDate()
+                      setUserData({ dateOfBirth: d.toISOString().split('T')[0] })
+                      setErrors((prev) => ({ ...prev, dateOfBirth: "" }))
+                    }
+                  }}
+                  calendar={persian}
+                  locale={persian_fa}
+                  calendarPosition="bottom-right"
+                  inputClass="glass-input w-full rounded-xl px-4 py-2.5 text-sm text-ink-800 outline-none focus:ring-2 focus:ring-primary-200"
+                  containerClassName="w-full"
+                  format="YYYY/MM/DD"
+                  placeholder="انتخاب تاریخ"
+                />
+                {errors.dateOfBirth && <p className="mt-1 text-xs text-red-500">{errors.dateOfBirth}</p>}
+              </div>
 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-700">
@@ -320,6 +341,25 @@ export default function ProfileCompletion() {
                   ))}
                 </div>
               </div>
+
+              <SelectField
+                label="نوع بیمه درمانی"
+                value={userData.insuranceType}
+                onChange={(e) => setUserData({ insuranceType: e.target.value })}
+              >
+                <option value="">انتخاب کنید</option>
+                <option value="تامین اجتماعی">تامین اجتماعی</option>
+                <option value="خدمات درمانی">خدمات درمانی</option>
+                <option value="آزاد">آزاد</option>
+              </SelectField>
+
+              <InputField
+                label="بیمه تکمیلی"
+                name="supplementaryInsurance"
+                placeholder="در صورت وجود"
+                value={userData.supplementaryInsurance}
+                onChange={(e) => setUserData({ supplementaryInsurance: e.target.value })}
+              />
             </div>
           )}
 
@@ -348,33 +388,41 @@ export default function ProfileCompletion() {
                 <label className="mb-1.5 block text-sm font-medium text-ink-700">
                   حساسیت‌ها
                 </label>
+                <div className="flex gap-2 mb-2">
+                  <select
+                    value={allergySelect}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "__other__") return;
+                      if (val) {
+                        addChip("allergies", val, allergyInput, setAllergyInput);
+                        setAllergySelect("");
+                      }
+                    }}
+                    className="glass-input flex-1 rounded-xl px-3 py-2 text-sm text-ink-800 outline-none"
+                  >
+                    <option value="">انتخاب از موارد موجود</option>
+                    {allergyOptions.filter(o => !userData.allergies.includes(o)).map(o => (
+                      <option key={o} value={o}>{o}</option>
+                    ))}
+                    <option value="__other__">سایر (تایپ کنید)</option>
+                  </select>
+                </div>
                 <div className="flex gap-2">
                   <input
                     className="glass-input flex-1 rounded-xl px-3 py-2 text-sm text-ink-800 outline-none"
-                    placeholder="مثال: پنی‌سیلین"
+                    placeholder="مورد جدید تایپ کنید"
                     value={allergyInput}
                     onChange={(e) => setAllergyInput(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        addChip(
-                          "allergies",
-                          allergyInput,
-                          allergyInput,
-                          setAllergyInput,
-                        );
+                        addChip("allergies", allergyInput, allergyInput, setAllergyInput);
                       }
                     }}
                   />
                   <button
-                    onClick={() =>
-                      addChip(
-                        "allergies",
-                        allergyInput,
-                        allergyInput,
-                        setAllergyInput,
-                      )
-                    }
+                    onClick={() => addChip("allergies", allergyInput, allergyInput, setAllergyInput)}
                     className="rounded-xl bg-primary-500 px-3 text-sm text-white"
                   >
                     +
@@ -405,33 +453,41 @@ export default function ProfileCompletion() {
                 <label className="mb-1.5 block text-sm font-medium text-ink-700">
                   بیماری‌های زمینه‌ای
                 </label>
+                <div className="flex gap-2 mb-2">
+                  <select
+                    value={conditionSelect}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      if (val === "__other__") return;
+                      if (val) {
+                        addChip("chronicConditions", val, conditionInput, setConditionInput);
+                        setConditionSelect("");
+                      }
+                    }}
+                    className="glass-input flex-1 rounded-xl px-3 py-2 text-sm text-ink-800 outline-none"
+                  >
+                    <option value="">انتخاب از موارد موجود</option>
+                    {conditionOptions.filter(o => !userData.chronicConditions.includes(o)).map(o => (
+                      <option key={o} value={o}>{o}</option>
+                    ))}
+                    <option value="__other__">سایر (تایپ کنید)</option>
+                  </select>
+                </div>
                 <div className="flex gap-2">
                   <input
                     className="glass-input flex-1 rounded-xl px-3 py-2 text-sm text-ink-800 outline-none"
-                    placeholder="مثال: دیابت"
+                    placeholder="مورد جدید تایپ کنید"
                     value={conditionInput}
                     onChange={(e) => setConditionInput(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === "Enter") {
                         e.preventDefault();
-                        addChip(
-                          "chronicConditions",
-                          conditionInput,
-                          conditionInput,
-                          setConditionInput,
-                        );
+                        addChip("chronicConditions", conditionInput, conditionInput, setConditionInput);
                       }
                     }}
                   />
                   <button
-                    onClick={() =>
-                      addChip(
-                        "chronicConditions",
-                        conditionInput,
-                        conditionInput,
-                        setConditionInput,
-                      )
-                    }
+                    onClick={() => addChip("chronicConditions", conditionInput, conditionInput, setConditionInput)}
                     className="rounded-xl bg-primary-500 px-3 text-sm text-white"
                   >
                     +
@@ -550,10 +606,11 @@ export default function ProfileCompletion() {
                   <div className="mt-4 animate-fade-in space-y-3">
                     {docFields.map((field) => {
                       const files = docFiles[field.key] || [];
+                      const hasError = field.required && !files.some(f => f.status === 'uploaded') && errors[field.key];
                       return (
                         <div
                           key={field.key}
-                          className="glass-soft rounded-xl p-3"
+                          className={cn("glass-soft rounded-xl p-3", hasError && "border border-red-300")}
                         >
                           <div className="mb-1.5 flex items-center justify-between">
                             <div className="flex items-center gap-1.5">
@@ -572,6 +629,7 @@ export default function ProfileCompletion() {
                               )}
                             </div>
                           </div>
+                          {hasError && <p className="mb-1 text-[11px] text-red-500">{errors[field.key]}</p>}
 
                           <DocDropZone
                             accept={field.accept}

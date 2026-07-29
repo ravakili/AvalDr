@@ -16,7 +16,6 @@ export interface Person {
   name: string
   avatar: string // URL
   phone: string
-  email?: string
 }
 
 export interface WorkingHourSlot {
@@ -36,6 +35,7 @@ export interface CommunicationSettings {
 }
 
 export interface Doctor extends Person {
+  prefix?: string
   specialtyId: string
   city: string
   hospital: string
@@ -61,6 +61,10 @@ export interface Patient extends Person {
   age: number
   gender: 'male' | 'female'
   city: string
+  bloodType?: string
+  insuranceType?: string
+  supplementaryInsurance?: string
+  emergencyContact?: { name: string; phone: string; relationship: string }
   medicalHistory?: MedicalRecord
   suspended?: boolean
 }
@@ -86,6 +90,8 @@ export interface Appointment {
   reason: string
   consultType?: ConsultType
   createdAt?: string
+  startedAt?: string
+  isFollowUp?: boolean
   patient?: Patient
   doctor?: Doctor
   paymentStatus?: string | null
@@ -128,7 +134,6 @@ export interface MockUser {
   phone: string
   role: Role
   name: string
-  email?: string
   documents: DoctorDocuments | null
 }
 
@@ -152,10 +157,11 @@ export interface UploadingFile {
 
 export interface UserData {
   name: string
-  email: string
   dateOfBirth: string
   gender: 'male' | 'female'
   bloodType: string
+  insuranceType: string
+  supplementaryInsurance: string
   allergies: string[]
   chronicConditions: string[]
   emergencyContact: {

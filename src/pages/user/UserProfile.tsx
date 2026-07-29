@@ -20,22 +20,11 @@ import {
 } from "../../components/ui/icons";
 import { roleLabel } from "../../components/layout/nav";
 import type { MedicalRecord } from "../../types";
+import { api } from "../../lib/api";
 
 type Section = "personal" | "medical" | "reports" | "notifications";
 type CategoryKey = "diagnoses" | "allergies" | "medications";
 type BadgeTone = "blue" | "red" | "teal";
-
-const CATEGORY_OPTIONS: Record<CategoryKey, string[]> = {
-  diagnoses: [
-    "فشار خون بالا", "دیابت نوع ۲", "کلسترول بالا", "آسم", "میگرن", "کم‌خونی",
-  ],
-  allergies: [
-    "پنی‌سیلین", "بادام زمینی", "گلدان", "گرد و غبار", "آسپرین", "لاکتوز",
-  ],
-  medications: [
-    "متابولیک", "آتورواستاتین", "متفرمین", "آسپرین", "امپرازول", "سرترالین",
-  ],
-};
 
 export default function UserProfile() {
   const user = useAuthStore((s) => s.user);
@@ -64,11 +53,16 @@ export default function UserProfile() {
       setFormData({
         name: profile.name || "",
         phone: profile.phone || "",
-        email: profile.email || "",
         nationalId: profile.nationalId || "",
         age: String(profile.age || ""),
         gender: profile.gender || "male",
         city: profile.city || "",
+        bloodType: profile.bloodType || "",
+        insuranceType: profile.insuranceType || "",
+        supplementaryInsurance: profile.supplementaryInsurance || "",
+        emergencyName: profile.emergencyContact?.name || "",
+        emergencyPhone: profile.emergencyContact?.phone || "",
+        emergencyRelation: profile.emergencyContact?.relationship || "",
       })
     }
   }, [profile]);
@@ -88,6 +82,24 @@ export default function UserProfile() {
     }
   }, [medicalRecord]);
 
+  const [defOptions, setDefOptions] = useState<Record<string, { id: string; name: string }[]>>({});
+
+  useEffect(() => {
+    const fetchDefs = async () => {
+      try {
+        const types = ['city', 'insurance_type', 'supplementary_insurance', 'diagnosis', 'allergy', 'drug'];
+        const results = await Promise.all(
+          types.map(async (t) => {
+            const data = await api.get<{ id: string; name: string }[]>(`/admin/definitions/?type=${t}`);
+            return [t, data] as [string, { id: string; name: string }[]];
+          })
+        );
+        setDefOptions(Object.fromEntries(results));
+      } catch { /* ignore */ }
+    };
+    fetchDefs();
+  }, []);
+
   // Uploading reports state
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -100,11 +112,17 @@ export default function UserProfile() {
 
   const handleSavePersonal = async () => {
     const payload: Record<string, unknown> = {};
-    if (formData.email !== profile?.email) payload.email = formData.email;
     if (formData.name !== profile?.name) payload.name = formData.name;
     if (formData.city !== profile?.city) payload.city = formData.city;
     if (formData.nationalId !== profile?.nationalId) payload.nationalId = formData.nationalId;
     if (formData.gender !== profile?.gender) payload.gender = formData.gender;
+    if (formData.bloodType !== profile?.bloodType) payload.bloodType = formData.bloodType;
+    if (formData.insuranceType !== profile?.insuranceType) payload.insuranceType = formData.insuranceType;
+    if (formData.supplementaryInsurance !== profile?.supplementaryInsurance) payload.supplementaryInsurance = formData.supplementaryInsurance;
+    const ec = profile?.emergencyContact || { name: "", phone: "", relationship: "" };
+    if (formData.emergencyName !== ec.name || formData.emergencyPhone !== ec.phone || formData.emergencyRelation !== ec.relationship) {
+      payload.emergencyContact = { name: formData.emergencyName, phone: formData.emergencyPhone, relationship: formData.emergencyRelation };
+    }
     try {
       await saveProfile(payload);
       alert("اطلاعات با موفقیت ذخیره شد.");
@@ -220,14 +238,6 @@ export default function UserProfile() {
                 disabled
               />
               <InputField
-                label="ایمیل"
-                dir="ltr"
-                className="text-right"
-                value={formData.email}
-                onChange={(e) => setFormData(f => ({ ...f, email: e.target.value }))}
-                name="email"
-              />
-              <InputField
                 label="کد ملی"
                 dir="ltr"
                 className="text-right"
@@ -244,12 +254,51 @@ export default function UserProfile() {
                 <option value="male">آقا</option>
                 <option value="female">خانم</option>
               </SelectField>
-              <InputField
+              <SelectField
                 label="شهر"
                 value={formData.city}
                 onChange={(e) => setFormData(f => ({ ...f, city: e.target.value }))}
                 name="city"
-              />
+              >
+                <option value="">انتخاب کنید</option>
+                {(defOptions.city || []).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+              </SelectField>
+              <SelectField
+                label="گروه خونی"
+                value={formData.bloodType}
+                onChange={(e) => setFormData(f => ({ ...f, bloodType: e.target.value }))}
+                name="bloodType"
+              >
+                <option value="">انتخاب کنید</option>
+                {["A+","A-","B+","B-","AB+","AB-","O+","O-"].map(b => <option key={b} value={b}>{b}</option>)}
+              </SelectField>
+              <SelectField
+                label="نوع بیمه درمانی"
+                value={formData.insuranceType}
+                onChange={(e) => setFormData(f => ({ ...f, insuranceType: e.target.value }))}
+                name="insuranceType"
+              >
+                <option value="">انتخاب کنید</option>
+                {(defOptions.insurance_type || []).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+              </SelectField>
+              <SelectField
+                label="بیمه تکمیلی"
+                value={formData.supplementaryInsurance}
+                onChange={(e) => setFormData(f => ({ ...f, supplementaryInsurance: e.target.value }))}
+                name="supplementaryInsurance"
+              >
+                <option value="">ندارد</option>
+                {(defOptions.supplementary_insurance || []).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+              </SelectField>
+            </div>
+            {/* Emergency Contact */}
+            <div className="mt-4 rounded-2xl border border-white/50 bg-white/40 p-4">
+              <p className="mb-3 text-sm font-medium text-ink-700">تماس اضطراری</p>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                <InputField label="نام و نام خانوادگی" value={formData.emergencyName || ""} onChange={(e) => setFormData(f => ({ ...f, emergencyName: e.target.value }))} name="emergencyName" />
+                <InputField label="شماره تماس" dir="ltr" className="text-right" value={formData.emergencyPhone || ""} onChange={(e) => setFormData(f => ({ ...f, emergencyPhone: e.target.value.replace(/[^0-9۰-۹]/g, "").slice(0, 11) }))} name="emergencyPhone" />
+                <InputField label="نسبت" value={formData.emergencyRelation || ""} onChange={(e) => setFormData(f => ({ ...f, emergencyRelation: e.target.value }))} name="emergencyRelation" />
+              </div>
             </div>
             <div className="mt-6 flex justify-end gap-3">
               <PrimaryButton icon={<IconCheck />} onClick={handleSavePersonal} disabled={loading}>
@@ -261,12 +310,16 @@ export default function UserProfile() {
 
         {section === "medical" && (
           <div className="space-y-5">
+            <div className="flex items-center gap-3 rounded-xl border border-white/50 bg-white/40 p-3">
+              <span className="text-sm font-medium text-ink-700">گروه خونی:</span>
+              <span className="text-sm font-bold text-ink-800">{profile?.bloodType || "ثبت نشده"}</span>
+            </div>
             <MedicalCategory
               label="تشخیص‌ها"
               emptyText="بدون سابقه"
               tone="blue"
               items={diagnoses}
-              options={CATEGORY_OPTIONS.diagnoses}
+              options={(defOptions.diagnosis || []).map(d => d.name)}
               onAdd={(v) => addEntry("diagnoses", v)}
             />
             <MedicalCategory
@@ -274,7 +327,7 @@ export default function UserProfile() {
               emptyText="بدون حساسیت"
               tone="red"
               items={allergies}
-              options={CATEGORY_OPTIONS.allergies}
+              options={(defOptions.allergy || []).map(d => d.name)}
               onAdd={(v) => addEntry("allergies", v)}
             />
             <MedicalCategory
@@ -282,7 +335,7 @@ export default function UserProfile() {
               emptyText="بدون داروی فعلی"
               tone="teal"
               items={medications}
-              options={CATEGORY_OPTIONS.medications}
+              options={(defOptions.drug || []).map(d => d.name)}
               onAdd={(v) => addEntry("medications", v)}
             />
             <div>

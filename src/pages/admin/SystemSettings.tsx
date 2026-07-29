@@ -1,26 +1,54 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import GlassCard from '../../components/ui/GlassCard'
 import PrimaryButton from '../../components/ui/PrimaryButton'
 import InputField, { SelectField } from '../../components/ui/InputField'
 import Toggle from '../../components/ui/Toggle'
 import Tabs from '../../components/ui/Tabs'
-import { IconCheck, IconSettings } from '../../components/ui/icons'
-import { platformSettings as seed } from '../../data/apiData'
+import Avatar from '../../components/ui/Avatar'
+import { IconCheck, IconSettings, IconUser } from '../../components/ui/icons'
+import { api, apiRequest } from '../../lib/api'
+import { useAuthStore } from '../../store/authStore'
 import type { PlatformSetting } from '../../types'
 
-type Section = 'general' | 'fees' | 'notifications' | 'templates'
+type Section = 'general' | 'fees' | 'notifications' | 'templates' | 'profile'
 
-const templates = [
+const defaultTemplates = [
   { key: 'welcome', label: 'پیام خوش‌آمد کاربر', body: 'سلام {name}، به دکتر سینا خوش آمدید! 🎉' },
   { key: 'appointment', label: 'تأیید نوبت', body: 'نوبت شما با {doctor} در تاریخ {date} ساعت {time} تأیید شد.' },
   { key: 'reminder', label: 'یادآوری نوبت', body: 'یادآوری: نوبت شما تا یک ساعت دیگر آغاز می‌شود.' },
   { key: 'prescription', label: 'آماده شدن نسخه', body: 'نسخه شما توسط {doctor} صادر شد. در پنل کاربری قابل مشاهده است.' },
 ]
 
+function extractResults<T>(response: T | { results: T }): T {
+  if (response && typeof response === 'object' && 'results' in response) {
+    return (response as { results: T }).results
+  }
+  return response as T
+}
+
 export default function SystemSettings() {
+  const { user } = useAuthStore()
   const [section, setSection] = useState<Section>('general')
-  const [settings, setSettings] = useState<PlatformSetting[]>(seed)
-  const [smsTemplates, setSmsTemplates] = useState(templates)
+  const [settings, setSettings] = useState<PlatformSetting[]>([])
+  const [smsTemplates, setSmsTemplates] = useState(defaultTemplates)
+  const [loading, setLoading] = useState(true)
+  const [saving, setSaving] = useState(false)
+  const [profileName, setProfileName] = useState(user?.name || '')
+  const [profileAvatar, setProfileAvatar] = useState<File | null>(null)
+  const [profileSaving, setProfileSaving] = useState(false)
+
+  useEffect(() => {
+    Promise.all([
+      api.get<PlatformSetting[]>('/admin/settings/'),
+      api.get<{ key: string; label: string; body: string }[]>('/admin/sms-templates/'),
+    ])
+      .then(([settingsData, templatesData]) => {
+        setSettings(extractResults(settingsData))
+        const t = extractResults(templatesData)
+        if (t.length) setSmsTemplates(t)
+      })
+      .finally(() => setLoading(false))
+  }, [])
 
   const update = (key: string, value: string) =>
     setSettings((arr) => arr.map((s) => (s.key === key ? { ...s, value } : s)))
@@ -32,6 +60,53 @@ export default function SystemSettings() {
     return false
   }
 
+  const saveSettings = async () => {
+    setSaving(true)
+    try {
+      const visible = settings.filter(inSection)
+      await Promise.all(visible.map((s) => api.patch(`/admin/settings/${s.key}/`, { value: s.value })))
+      alert('تنظیمات با موفقیت ذخیره شد.')
+    } catch {
+      alert('خطا در ذخیره تنظیمات')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveTemplates = async () => {
+    setSaving(true)
+    try {
+      await Promise.all(smsTemplates.map((t) => api.patch(`/admin/sms-templates/${t.key}/`, { body: t.body })))
+      alert('قالب‌های پیامک با موفقیت ذخیره شد.')
+    } catch {
+      alert('خطا در ذخیره قالب‌ها')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const saveProfile = async () => {
+    setProfileSaving(true)
+    try {
+      if (profileAvatar) {
+        const formData = new FormData()
+        formData.append('avatar', profileAvatar)
+        await apiRequest('/admin/me/', { method: 'PATCH', body: formData })
+      }
+      if (profileName !== user?.name) {
+        await api.patch('/admin/me/', { name: profileName })
+      }
+      useAuthStore.getState().login(user?.role || 'admin', profileName)
+      alert('پروفایل با موفقیت به‌روزرسانی شد.')
+    } catch {
+      alert('خطا در به‌روزرسانی پروفایل')
+    } finally {
+      setProfileSaving(false)
+    }
+  }
+
+  if (loading) return <div className="p-10 text-center text-ink-400">در حال بارگذاری...</div>
+
   return (
     <div className="space-y-5">
       <Tabs
@@ -42,10 +117,42 @@ export default function SystemSettings() {
           { key: 'fees', label: 'تعرفه‌ها' },
           { key: 'notifications', label: 'اعلان‌ها' },
           { key: 'templates', label: 'قالب پیامک' },
+          { key: 'profile', label: 'پروفایل' },
         ]}
       />
 
-      {section === 'templates' ? (
+      {section === 'profile' ? (
+        <GlassCard className="p-6">
+          <div className="mb-5 flex items-center gap-2">
+            <IconUser className="h-5 w-5 text-primary-500" />
+            <h3 className="font-bold text-ink-800">پروفایل مدیر</h3>
+          </div>
+          <div className="flex flex-col items-center gap-6 sm:flex-row">
+            <Avatar src={user?.avatar} size="xl" ring />
+            <div className="flex-1 space-y-4">
+              <InputField
+                label="نام مدیر"
+                value={profileName}
+                onChange={(e) => setProfileName(e.target.value)}
+              />
+              <div>
+                <p className="mb-1 text-sm font-medium text-ink-700">تصویر پروفایل</p>
+                <input
+                  type="file"
+                  accept="image/*"
+                  onChange={(e) => setProfileAvatar(e.target.files?.[0] || null)}
+                  className="glass-input w-full rounded-xl px-4 py-2.5 text-sm text-ink-800 outline-none focus:ring-2 focus:ring-primary-200"
+                />
+              </div>
+              <div className="flex justify-end pt-2">
+                <PrimaryButton icon={<IconCheck />} onClick={saveProfile} disabled={profileSaving}>
+                  {profileSaving ? 'در حال ذخیره...' : 'ذخیره پروفایل'}
+                </PrimaryButton>
+              </div>
+            </div>
+          </div>
+        </GlassCard>
+      ) : section === 'templates' ? (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
           {smsTemplates.map((t, idx) => (
             <GlassCard key={t.key} className="p-5">
@@ -62,7 +169,9 @@ export default function SystemSettings() {
             </GlassCard>
           ))}
           <div className="lg:col-span-2">
-            <PrimaryButton icon={<IconCheck />}>ذخیره قالب‌ها</PrimaryButton>
+            <PrimaryButton icon={<IconCheck />} onClick={saveTemplates} disabled={saving}>
+              {saving ? 'در حال ذخیره...' : 'ذخیره قالب‌ها'}
+            </PrimaryButton>
           </div>
         </div>
       ) : (
@@ -102,7 +211,9 @@ export default function SystemSettings() {
             ))}
           </div>
           <div className="mt-6 flex justify-end">
-            <PrimaryButton icon={<IconCheck />}>ذخیره تنظیمات</PrimaryButton>
+            <PrimaryButton icon={<IconCheck />} onClick={saveSettings} disabled={saving}>
+              {saving ? 'در حال ذخیره...' : 'ذخیره تنظیمات'}
+            </PrimaryButton>
           </div>
         </GlassCard>
       )}

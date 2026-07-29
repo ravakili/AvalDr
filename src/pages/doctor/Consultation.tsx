@@ -24,7 +24,7 @@ import {
   IconVideo,
 } from '../../components/ui/icons'
 import { appointments, drugSuggestions, getPatient } from '../../data/apiData'
-import { getDoctor, refreshBackendData } from '../../data/apiData'
+import { doctorName, getDoctor, refreshBackendData } from '../../data/apiData'
 import { api } from '../../lib/api'
 import { useAuthStore } from '../../store/authStore'
 import { cn, formatDateFa, toFa } from '../../lib/utils'
@@ -158,7 +158,7 @@ export default function Consultation() {
         <Avatar src={counterpart.avatar} size="md" ring online />
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="truncate font-bold text-ink-800">{counterpart.name}</h2>
+            <h2 className="truncate font-bold text-ink-800">{!isDoctor && doctor ? doctorName(doctor) : counterpart.name}</h2>
             <Badge tone="green" dot>
               آنلاین
             </Badge>
@@ -218,7 +218,7 @@ export default function Consultation() {
             {/* Remote (patient) */}
             <div className="flex aspect-video flex-col items-center justify-center rounded-2xl bg-ink-900 text-white">
               <Avatar src={counterpart.avatar} size="xl" />
-              <p className="mt-3 font-semibold">{counterpart.name}</p>
+              <p className="mt-3 font-semibold">{!isDoctor && doctor ? doctorName(doctor) : counterpart.name}</p>
               <p className="text-xs text-white/60">{isDoctor ? 'بیمار' : 'پزشک'}</p>
             </div>
             {/* Local (doctor) */}

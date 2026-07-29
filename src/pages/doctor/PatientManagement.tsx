@@ -129,10 +129,21 @@ export default function PatientManagement() {
                   {isExpanded ? <IconChevronUp className="h-4 w-4 text-ink-400" /> : <IconChevronDown className="h-4 w-4 text-ink-400" />}
                 </button>
 
-                {isExpanded && (
-                  <div className="animate-fade-in space-y-4 border-t border-white/40 p-4">
-                    {/* Medical history */}
-                    <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                  {isExpanded && (
+                    <div className="animate-fade-in space-y-4 border-t border-white/40 p-4">
+                      {/* Insurance */}
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                        <div>
+                          <p className="mb-1 text-[11px] text-ink-400">نوع بیمه</p>
+                          <p className="text-sm font-semibold text-ink-700">{p.insuranceType || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="mb-1 text-[11px] text-ink-400">بیمه تکمیلی</p>
+                          <p className="text-sm font-semibold text-ink-700">{p.supplementaryInsurance || '—'}</p>
+                        </div>
+                      </div>
+                      {/* Medical history */}
+                      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
                       <div>
                         <p className="mb-1 text-[11px] text-ink-400">تشخیص‌ها</p>
                         <div className="flex flex-wrap gap-1.5">
@@ -270,6 +281,7 @@ export default function PatientManagement() {
                   reason: fuNote || 'نوبت پیگیری',
                   consultType: 'video',
                   paymentStatus: 'pending',
+                  isFollowUp: true,
                 })
                 await refreshBackendData('doctor')
                 setFollowUpId(null)

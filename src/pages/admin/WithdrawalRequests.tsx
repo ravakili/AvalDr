@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import GlassCard from '../../components/ui/GlassCard'
 import Avatar from '../../components/ui/Avatar'
 import Badge from '../../components/ui/Badge'
@@ -7,7 +7,8 @@ import StatCard from '../../components/ui/StatCard'
 import Modal from '../../components/ui/Modal'
 import { TextArea } from '../../components/ui/InputField'
 import { IconCheck, IconClose, IconWallet } from '../../components/ui/icons'
-import { doctors, withdrawalRequests as seed } from '../../data/apiData'
+import { doctors } from '../../data/apiData'
+import { api } from '../../lib/api'
 import { formatToman, toFa } from '../../lib/utils'
 import type { WithdrawalRequest } from '../../types'
 
@@ -17,40 +18,75 @@ const statusMeta: Record<WithdrawalRequest['status'], { tone: 'green' | 'amber' 
   rejected: { tone: 'red', label: 'رد شده' },
 }
 
+function extractResults<T>(response: T | { results: T }): T {
+  if (response && typeof response === 'object' && 'results' in response) {
+    return (response as { results: T }).results
+  }
+  return response as T
+}
+
 export default function WithdrawalRequests() {
-  const [list, setList] = useState<WithdrawalRequest[]>(seed)
+  const [list, setList] = useState<WithdrawalRequest[]>([])
+  const [loading, setLoading] = useState(true)
   const [reviewId, setReviewId] = useState<string | null>(null)
   const [note, setNote] = useState('')
   const [filter, setFilter] = useState<'all' | WithdrawalRequest['status']>('all')
 
+  useEffect(() => {
+    api.get<WithdrawalRequest[]>('/admin/withdrawals/')
+      .then((data) => setList(extractResults(data)))
+      .finally(() => setLoading(false))
+  }, [])
+
   const reviewItem = reviewId ? list.find((w) => w.id === reviewId) : null
   const filtered = filter === 'all' ? list : list.filter((w) => w.status === filter)
 
-  const decide = (status: 'approved' | 'rejected') => {
-    setList((arr) =>
-      arr.map((w) =>
-        w.id === reviewId
-          ? { ...w, status, processedAt: new Date().toISOString(), adminNote: note }
-          : w,
-      ),
-    )
+  const decide = async (status: 'approved' | 'rejected') => {
+    if (!reviewId) return
+    try {
+      await api.post(`/admin/withdrawals/${reviewId}/decide/`, { status, adminNote: note })
+      setList((arr) =>
+        arr.map((w) =>
+          w.id === reviewId
+            ? { ...w, status, processedAt: new Date().toISOString(), adminNote: note }
+            : w,
+        ),
+      )
+    } catch {
+      alert('خطا در ثبت تصمیم')
+    }
     setReviewId(null)
     setNote('')
+  }
+
+  const quickDecide = async (id: string, status: 'approved' | 'rejected') => {
+    try {
+      await api.post(`/admin/withdrawals/${id}/decide/`, { status, adminNote: '' })
+      setList((arr) =>
+        arr.map((w) =>
+          w.id === id
+            ? { ...w, status, processedAt: new Date().toISOString(), adminNote: '' }
+            : w,
+        ),
+      )
+    } catch {
+      alert('خطا در ثبت تصمیم')
+    }
   }
 
   const totalPending = list.filter((w) => w.status === 'pending').reduce((s, w) => s + w.amount, 0)
   const totalApproved = list.filter((w) => w.status === 'approved').reduce((s, w) => s + w.amount, 0)
 
+  if (loading) return <div className="p-10 text-center text-ink-400">در حال بارگذاری...</div>
+
   return (
     <div className="space-y-5">
-      {/* Stats */}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
         <StatCard title="در انتظار بررسی" value={formatToman(totalPending)} delta={`${toFa(list.filter((w) => w.status === 'pending').length)} درخواست`} trend="flat" tone="amber" icon={<IconWallet />} />
         <StatCard title="تأییدشده" value={formatToman(totalApproved)} delta="این ماه" trend="up" tone="teal" icon={<IconCheck />} />
         <StatCard title="کل درخواست‌ها" value={list.length} delta="در کل" trend="flat" tone="blue" icon={<IconWallet />} />
       </div>
 
-      {/* Filter + table */}
       <GlassCard className="flex flex-wrap items-center justify-between gap-3 p-4">
         <div className="flex flex-wrap gap-1.5">
           {(['all', 'pending', 'approved', 'rejected'] as const).map((s) => (
@@ -107,14 +143,14 @@ export default function WithdrawalRequests() {
                               بررسی
                             </button>
                             <button
-                              onClick={() => { setReviewId(w.id); setNote(''); }}
+                              onClick={() => quickDecide(w.id, 'approved')}
                               className="grid h-7 w-7 place-items-center rounded-lg text-emerald-500 transition hover:bg-emerald-50"
                               title="تأیید سریع"
                             >
                               <IconCheck className="h-3.5 w-3.5" />
                             </button>
                             <button
-                              onClick={() => { setReviewId(w.id); setNote('') }}
+                              onClick={() => quickDecide(w.id, 'rejected')}
                               className="grid h-7 w-7 place-items-center rounded-lg text-red-500 transition hover:bg-red-50"
                               title="رد"
                             >
@@ -135,7 +171,6 @@ export default function WithdrawalRequests() {
         </div>
       </GlassCard>
 
-      {/* Review modal */}
       <Modal
         open={!!reviewItem}
         onClose={() => setReviewId(null)}

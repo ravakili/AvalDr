@@ -27,24 +27,12 @@ import {
   IconChevron,
   IconPlus,
 } from '../../components/ui/icons'
-import { appointments, drugSuggestions, getPatient, getDoctor, refreshBackendData, doctors } from '../../data/apiData'
+import { appointments, drugSuggestions, getPatient, getDoctor, doctorName, refreshBackendData, doctors } from '../../data/apiData'
 import { api } from '../../lib/api'
 import { useAuthStore } from '../../store/authStore'
 import { cn, formatDateFa, toFa, shortDateFa } from '../../lib/utils'
 import type { Appointment, ChatMessage, Prescription, ConsultType } from '../../types'
 import { BiMessageRoundedDots, BiSupport } from 'react-icons/bi'
-
-/* ───────── helper to compute auto‑close deadline ───────── */
-function getAutoCloseMs(appt: Appointment | undefined, doctorProfile: typeof doctors[0] | undefined | null): number | null {
-  if (!appt || !doctorProfile) return null
-  const dayNames = ['شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه']
-  const d = new Date(appt.date)
-  const persianIndex = d.getDay() === 6 ? 0 : d.getDay() + 1
-  const dayName = dayNames[persianIndex]
-  const slot = doctorProfile.workingHours.find(h => h.day === dayName && h.from <= appt.time && h.to > appt.time)
-  const durationMin = slot?.appointmentDurationMinutes ?? 30
-  return durationMin * 60 * 1000
-}
 
 /* ───────── helper to get conversation counterpart ───────── */
 function chatCounterpart(a: typeof appointments[0], isDoctor: boolean) {
@@ -97,18 +85,17 @@ export default function ChatPage() {
   /* ── end modal ── */
   const [endOpen, setEndOpen] = useState(false)
 
-  /* ── auto‑close timer ── */
+  /* ── chat state ── */
   const [chatClosed, setChatClosed] = useState(false)
-  const [closeCountdown, setCloseCountdown] = useState<string | null>(null)
+  const [lastMessages, setLastMessages] = useState<Record<string, string>>({})
 
   /* ── derived counterpart ── */
-  const patient = activeAppt ? getPatient(activeAppt.patientId) : null
-  const doctor = activeAppt ? getDoctor(activeAppt.doctorId) : null
-  const doctorProfile = isDoctor ? doctors.find(d => d.id === ME_REF) : doctor
+  const patient = activeAppt ? getPatient(activeAppt.patientId) : undefined
+  const doctor = activeAppt ? getDoctor(activeAppt.doctorId) : undefined
   const counterpart = isAdminChat
     ? { name: 'پشتیبانی', avatar: '', phone: '' }
     : isDoctor ? patient : doctor
-  const counterpartName = counterpart?.name || ''
+  const counterpartName = !isDoctor ? doctorName(counterpart) : counterpart?.name || ''
 
   /* ── list appointments for sidebar ── */
   const myAppointments = useMemo(() => {
@@ -128,7 +115,12 @@ export default function ChatPage() {
     let active = true
     const fetchMessages = () =>
       api.get<ChatMessage[]>(`/chat/appointments/${activeId}/messages/`)
-        .then(msgs => { if (active) setMessages(msgs) })
+        .then(msgs => {
+          if (active) {
+            setMessages(msgs)
+            if (msgs.length) setLastMessages(prev => ({ ...prev, [activeId]: msgs[msgs.length - 1].text }))
+          }
+        })
         .catch(() => {})
     fetchMessages()
     const interval = setInterval(fetchMessages, 4000)
@@ -141,12 +133,17 @@ export default function ChatPage() {
   }, [activeId, isDoctor, isAdminChat])
 
   /* ── auto‑close logic ── */
+  const [closeCountdown, setCloseCountdown] = useState<string | null>(null)
   useEffect(() => {
-    if (isAdminChat || !activeAppt || activeAppt.status !== 'in-progress') { setChatClosed(false); setCloseCountdown(null); return }
-    const ms = getAutoCloseMs(activeAppt, doctorProfile)
-    if (!ms) return
-    const startedAt = new Date(`${activeAppt.date}T${activeAppt.time}`).getTime()
-    const deadline = startedAt + ms
+    if (isAdminChat || !activeAppt || activeAppt.status !== 'in-progress') {
+      setChatClosed(false); setCloseCountdown(null); return
+    }
+    const autoCloseMin = doctor?.communication?.chatAutoCloseMinutes
+    if (!autoCloseMin || autoCloseMin <= 0) {
+      setChatClosed(false); setCloseCountdown(null); return
+    }
+    const startedMs = activeAppt.startedAt ? new Date(activeAppt.startedAt).getTime() : new Date(`${activeAppt.date}T${activeAppt.time}`).getTime()
+    const deadline = startedMs + autoCloseMin * 60 * 1000
     const tick = () => {
       const remaining = deadline - Date.now()
       if (remaining <= 0) {
@@ -155,14 +152,15 @@ export default function ChatPage() {
         api.post(`/appointments/${activeId}/complete/`).catch(() => {})
         return
       }
-      const mins = Math.floor(remaining / 60000)
+      const hours = Math.floor(remaining / 3600000)
+      const mins = Math.floor((remaining % 3600000) / 60000)
       const secs = Math.floor((remaining % 60000) / 1000)
-      setCloseCountdown(`${toFa(String(mins).padStart(2, '0'))}:${toFa(String(secs).padStart(2, '0'))}`)
+      setCloseCountdown(`${toFa(String(hours).padStart(2, '0'))}:${toFa(String(mins).padStart(2, '0'))}:${toFa(String(secs).padStart(2, '0'))}`)
     }
     tick()
     const id = setInterval(tick, 1000)
     return () => clearInterval(id)
-  }, [activeId, activeAppt?.status, isAdminChat, doctorProfile])
+  }, [activeId, activeAppt?.status, isAdminChat, doctor?.communication?.chatAutoCloseMinutes])
 
   /* ── call timer ── */
   useEffect(() => {
@@ -234,7 +232,7 @@ export default function ChatPage() {
   }
 
   /* ────────────────── RENDER ────────────────── */
-  const canChat = !chatClosed && activeAppt?.status !== 'completed' && activeAppt?.status !== 'cancelled'
+  const canChat = !chatClosed && activeAppt?.status !== 'completed' && activeAppt?.status !== 'cancelled' && (isDoctor || isAdmin || activeAppt?.status !== 'waiting')
 
   return (
     <div className="flex h-[calc(100vh-9rem)] gap-4">
@@ -246,6 +244,7 @@ export default function ChatPage() {
         pastAppointments={pastAppointments}
         activeId={activeId}
         isDoctor={isDoctor}
+        lastMessages={lastMessages}
         onSelect={(id) => { setActiveId(id); setVideoActive(false) }}
       />
 
@@ -258,6 +257,7 @@ export default function ChatPage() {
           pastAppointments={pastAppointments}
           activeId={activeId}
           isDoctor={isDoctor}
+          lastMessages={lastMessages}
           onSelect={(id) => { setActiveId(id); setVideoActive(false) }}
         />
       )}
@@ -285,7 +285,7 @@ export default function ChatPage() {
                 <Avatar src={counterpart?.avatar || ''} size="md" ring online={activeAppt?.status === 'in-progress'} />
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="truncate font-bold text-ink-800">{counterpartName}</h2>
+                    <h2 className="truncate font-bold text-ink-800">{!isDoctor && doctor ? doctorName(doctor) : counterpartName}</h2>
                     {activeAppt?.status === 'in-progress' && <Badge tone="green" dot>فعال</Badge>}
                     {activeAppt?.status === 'waiting' && <Badge tone="amber">منتظر شروع</Badge>}
                     {activeAppt?.status === 'completed' && <Badge tone="green">تکمیل</Badge>}
@@ -301,7 +301,7 @@ export default function ChatPage() {
                   </div>
                 )}
                 <div className="flex gap-2">
-                  {!isAdminChat && (
+                  {!isAdminChat && activeAppt?.status === 'in-progress' && (
                     <>
                       {!videoActive ? (
                         <PrimaryButton size="sm" icon={<IconVideo className="h-4 w-4" />} onClick={() => setVideoActive(true)}>ویدئو</PrimaryButton>
@@ -445,6 +445,11 @@ export default function ChatPage() {
               <p className="text-sm text-ink-400">این جلسه به پایان رسیده است.</p>
             </div>
           )}
+          {!isDoctor && !isAdminChat && activeAppt?.status === 'waiting' && (
+            <div className="border-t border-white/50 p-6 text-center">
+              <p className="text-sm text-ink-400">منتظر شروع جلسه توسط پزشک باشید.</p>
+            </div>
+          )}
         </GlassCard>
       )}
 
@@ -514,7 +519,7 @@ export default function ChatPage() {
 }
 
 /* ───────── Chat list sidebar (shared desktop & mobile) ───────── */
-function ChatList({ className, myAppointments, activeAppointments, pastAppointments, activeId, isDoctor, onSelect }: {
+function ChatList({ className, myAppointments, activeAppointments, pastAppointments, activeId, isDoctor, onSelect, lastMessages }: {
   className?: string
   myAppointments: typeof appointments
   activeAppointments: typeof appointments
@@ -522,6 +527,7 @@ function ChatList({ className, myAppointments, activeAppointments, pastAppointme
   activeId: string
   isDoctor: boolean
   onSelect: (id: string) => void
+  lastMessages?: Record<string, string>
 }) {
   return (
     <GlassCard className={cn('flex flex-col overflow-hidden p-0 ', className)}>
@@ -556,8 +562,8 @@ function ChatList({ className, myAppointments, activeAppointments, pastAppointme
             >
               <Avatar src={cp?.avatar || ''} size="sm" online={a.status === 'in-progress'} />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-ink-800">{cp?.name || (isDoctor ? 'بیمار' : 'پزشک')}</p>
-                <p className="truncate text-[11px] text-ink-400">{formatDateFa(a.date)} • {toFa(a.time)}</p>
+                <p className="truncate text-sm font-semibold text-ink-800">{!isDoctor ? doctorName(cp) : (cp?.name || 'بیمار')}</p>
+                <p className="truncate text-[11px] text-ink-400">{lastMessages?.[a.id] ? lastMessages[a.id].slice(0, 40) : `${formatDateFa(a.date)} • ${toFa(a.time)}`}</p>
               </div>
               <Badge tone={a.status === 'in-progress' ? 'green' : 'amber'} dot />
             </button>
@@ -576,8 +582,8 @@ function ChatList({ className, myAppointments, activeAppointments, pastAppointme
             >
               <Avatar src={cp?.avatar || ''} size="sm" />
               <div className="min-w-0 flex-1">
-                <p className="truncate text-sm font-semibold text-ink-800">{cp?.name || (isDoctor ? 'بیمار' : 'پزشک')}</p>
-                <p className="truncate text-[11px] text-ink-400">{shortDateFa(a.date)}</p>
+                <p className="truncate text-sm font-semibold text-ink-800">{!isDoctor ? doctorName(cp) : (cp?.name || 'بیمار')}</p>
+                <p className="truncate text-[11px] text-ink-400">{lastMessages?.[a.id] ? lastMessages[a.id].slice(0, 40) : shortDateFa(a.date)}</p>
               </div>
               <Badge tone={a.status === 'completed' ? 'green' : 'red'}>{a.status === 'completed' ? 'تکمیل' : 'لغو'}</Badge>
             </button>

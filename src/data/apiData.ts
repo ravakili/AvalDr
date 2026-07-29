@@ -144,3 +144,5 @@ export function useBackendData(role: Role) {
 export const getDoctor = (id: string) => doctors.find((doctor) => doctor.id === id)
 export const getPatient = (id: string) => patients.find((patient) => patient.id === id)
 export const getSpecialty = (id: string) => specialties.find((specialty) => specialty.id === id)
+export const doctorName = (d: { name: string; prefix?: string } | null | undefined) =>
+  d ? `${d.prefix ? d.prefix + ' ' : ''}${d.name}` : ''

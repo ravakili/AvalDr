@@ -137,14 +137,18 @@ export default function DoctorAppointments() {
                   {/* Expandable details */}
                   {isExpanded && (
                     <div className="animate-fade-in border-t border-white/40 p-4">
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-5">
                         <div>
                           <p className="text-[11px] text-ink-400">شماره تماس</p>
                           <p className="text-sm font-medium text-ink-700" dir="ltr">{pat.phone}</p>
                         </div>
                         <div>
-                          <p className="text-[11px] text-ink-400">ایمیل</p>
-                          <p className="text-sm font-medium text-ink-700" dir="ltr">{pat.email}</p>
+                          <p className="text-[11px] text-ink-400">بیمه</p>
+                          <p className="text-sm font-medium text-ink-700">{pat.insuranceType || '—'}</p>
+                        </div>
+                        <div>
+                          <p className="text-[11px] text-ink-400">بیمه تکمیلی</p>
+                          <p className="text-sm font-medium text-ink-700">{pat.supplementaryInsurance || '—'}</p>
                         </div>
                         <div>
                           <p className="text-[11px] text-ink-400">علائم</p>
@@ -269,6 +273,10 @@ export default function DoctorAppointments() {
                   <p className="text-sm text-ink-400" dir="ltr">{pat.phone}</p>
                   <p className="text-xs text-ink-400">{pat.city} • {pat.gender === 'male' ? 'آقا' : 'خانم'} • {toFa(pat.age)} سال</p>
                 </div>
+              </div>
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <ProfileField label="نوع بیمه" value={pat.insuranceType || '—'} />
+                <ProfileField label="بیمه تکمیلی" value={pat.supplementaryInsurance || '—'} />
               </div>
               {pat.medicalHistory && (
                 <>

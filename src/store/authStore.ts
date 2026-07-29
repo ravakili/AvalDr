@@ -40,10 +40,11 @@ interface AuthState {
 
 const defaultUserData: UserData = {
   name: "",
-  email: "",
   dateOfBirth: "",
   gender: "male",
   bloodType: "",
+  insuranceType: "",
+  supplementaryInsurance: "",
   allergies: [],
   chronicConditions: [],
   emergencyContact: { name: "", phone: "", relationship: "" },

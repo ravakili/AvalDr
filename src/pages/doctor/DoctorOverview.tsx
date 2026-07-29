@@ -242,30 +242,38 @@ export default function DoctorOverview() {
             </div>
           </GlassCard>
 
-          {/* Follow-up reminders */}
+          {/* Follow-up appointments */}
           <GlassCard className="p-6">
-            <h3 className="mb-3 font-bold text-ink-800">یادآوری پیگیری</h3>
+            <h3 className="mb-3 font-bold text-ink-800">نوبت‌های پیگیری</h3>
             <div className="space-y-2">
-              {[
-                { name: 'زهرا موسوی', note: 'کنترل قند خون هفتگی', days: 3 },
-                { name: 'نیلوفر احمدی', note: 'نتیجه آزمایش چربی', days: 5 },
-              ].map((r, i) => (
-                <div
-                  key={i}
-                  className="flex items-center gap-3 rounded-xl border border-white/50 bg-white/40 p-3"
-                >
-                  <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600">
-                    <IconClock className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium text-ink-700">{r.name}</p>
-                    <p className="truncate text-[11px] text-ink-400">{r.note}</p>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-amber-50 px-2 py-0.5 text-[10px] font-medium text-amber-700">
-                    {toFa(r.days)} روز دیگر
-                  </span>
-                </div>
-              ))}
+              {mine
+                .filter((a) => a.isFollowUp)
+                .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+                .slice(0, 10)
+                .map((a) => {
+                  const pat = getPatient(a.patientId)
+                  if (!pat) return null
+                  return (
+                    <div
+                      key={a.id}
+                      className="flex items-center gap-3 rounded-xl border border-white/50 bg-white/40 p-3"
+                    >
+                      <div className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-amber-50 text-amber-600">
+                        <IconCalendar className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-sm font-medium text-ink-700">{pat.name}</p>
+                        <p className="truncate text-[11px] text-ink-400">
+                          {formatDateFa(a.date)} • {toFa(a.time)} • {a.reason}
+                        </p>
+                      </div>
+                      <StatusBadge status={a.status} />
+                    </div>
+                  )
+                })}
+              {mine.filter((a) => a.isFollowUp).length === 0 && (
+                <p className="py-6 text-center text-sm text-ink-400">نوبت پیگیری ثبت نشده است.</p>
+              )}
             </div>
           </GlassCard>
         </div>

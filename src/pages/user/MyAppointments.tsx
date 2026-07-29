@@ -18,7 +18,7 @@ import {
   IconVideo,
   IconWallet,
 } from '../../components/ui/icons'
-import { getDoctor } from '../../data/apiData'
+import { doctorName, getDoctor } from '../../data/apiData'
 import { cn, formatDateFa, formatToman, relativeDay, toFa } from '../../lib/utils'
 import type { AppointmentStatus } from '../../types'
 import { useAuthStore } from '../../store/authStore'
@@ -59,7 +59,7 @@ export default function MyAppointments() {
         })
         .filter((a) => {
           if (!search.trim()) return true
-          return getDoctor(a.doctorId)?.name.includes(search.trim())
+          return doctorName(getDoctor(a.doctorId))?.includes(search.trim())
         })
         .sort((a, b) => (a.date < b.date ? -1 : 1)),
     [appointments, tab, dateFilter, search, todayStr, profile],
@@ -177,7 +177,7 @@ export default function MyAppointments() {
                     <Avatar src={doc?.avatar} size="md" ring />
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <p className="truncate font-bold text-ink-800">{doc?.name || 'پزشک'}</p>
+                        <p className="truncate font-bold text-ink-800">{doctorName(doc) || 'پزشک'}</p>
                         <StatusBadge status={a.status} />
                         {a.consultType && (
                           <span className="inline-flex items-center gap-1 rounded-full bg-primary-50 px-2 py-0.5 text-[10px] font-medium text-primary-700">
@@ -196,12 +196,18 @@ export default function MyAppointments() {
                           <IconClock className="h-3.5 w-3.5" />
                           {toFa(a.time)}
                         </span>
+                        <span className="inline-flex items-center gap-1">
+                          بیمه: {profile?.insuranceType || '—'}
+                        </span>
+                        <span className="inline-flex items-center gap-1">
+                          تکمیلی: {profile?.supplementaryInsurance || '—'}
+                        </span>
                       </div>
                     </div>
                   </div>
 
                   <div className="flex shrink-0 flex-wrap gap-2">
-                    {(a.status === 'waiting' || a.status === 'in-progress') && !isPast && (
+                    {(a.status === 'in-progress' || a.status === 'completed' || (a.status === 'waiting' && !isPast)) && (
                       <PrimaryButton size="sm" variant="ghost" icon={<ConsultIcon className="h-4 w-4" />} onClick={() => navigate(`/user/consult/${a.id}`)}>
                         ورود به مشاوره
                       </PrimaryButton>

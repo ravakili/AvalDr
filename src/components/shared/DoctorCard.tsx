@@ -5,7 +5,7 @@ import GlassCard from '../ui/GlassCard'
 import PrimaryButton from '../ui/PrimaryButton'
 import { IconPin, IconStar } from '../ui/icons'
 import { formatToman, toFa } from '../../lib/utils'
-import { getSpecialty } from '../../data/apiData'
+import { doctorName, getSpecialty } from '../../data/apiData'
 import type { Doctor } from '../../types'
 
 export default function DoctorCard({ doctor }: { doctor: Doctor }) {
@@ -18,7 +18,7 @@ export default function DoctorCard({ doctor }: { doctor: Doctor }) {
         <Avatar src={doctor.avatar} size="lg" ring />
         <div className="min-w-0 flex-1">
           <div className="flex items-center justify-between gap-2">
-            <h3 className="truncate font-bold text-ink-800">{doctor.name}</h3>
+            <h3 className="truncate font-bold text-ink-800">{doctorName(doctor)}</h3>
             <Badge tone="amber">
               <IconStar className="h-3 w-3" /> {toFa(doctor.rating.toFixed(1))}
             </Badge>
