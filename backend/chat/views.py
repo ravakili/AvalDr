@@ -4,6 +4,7 @@ from rest_framework.response import Response
 
 from appointments.models import Appointment
 from config.permissions import IsActiveUser
+from notifications.services import notify
 
 from .models import ChatMessage
 from .serializers import ChatMessageSerializer
@@ -42,6 +43,16 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
             sender=request.user,
             file_name=getattr(request.data.get('file'), 'name', request.data.get('fileName', '')),
         )
+        recipients = [appointment.patient, appointment.doctor.user]
+        for recipient in recipients:
+            if recipient.pk != request.user.pk:
+                notify(
+                    recipient,
+                    f'پیام جدید از {request.user.display_name}',
+                    message.text[:160],
+                    'message',
+                    {'appointmentId': str(appointment.pk), 'senderId': str(request.user.pk)},
+                )
         return Response(ChatMessageSerializer(message, context={'request': request}).data, status=status.HTTP_201_CREATED)
 
 
@@ -51,11 +62,15 @@ class ChatRoomViewSet(viewsets.GenericViewSet):
 
     def list(self, request):
         if request.user.role == 'doctor':
-            appointments = Appointment.objects.filter(doctor__user=request.user)
+            appointments = Appointment.objects.filter(doctor__user=request.user).exclude(
+                status='pending-payment'
+            )
         elif request.user.role == 'admin':
-            appointments = Appointment.objects.all()
+            appointments = Appointment.objects.exclude(status='pending-payment')
         else:
-            appointments = Appointment.objects.filter(patient=request.user)
+            appointments = Appointment.objects.filter(patient=request.user).exclude(
+                status='pending-payment'
+            )
         data = []
         for appointment in appointments.select_related('doctor__user', 'doctor__specialty', 'patient'):
             last_message = appointment.messages.last()

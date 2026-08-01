@@ -100,10 +100,10 @@ class DoctorDocumentSerializer(serializers.ModelSerializer):
 
 class DoctorSerializer(serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
+    userId = serializers.CharField(source='user.pk', read_only=True)
     name = serializers.CharField(source='user.display_name', read_only=True)
     avatar = serializers.URLField(source='user.avatar', read_only=True)
     phone = serializers.CharField(source='user.phone', read_only=True)
-    email = serializers.EmailField(source='user.email', read_only=True)
     specialtyId = serializers.CharField(source='specialty_id', read_only=True)
     specialtyName = serializers.CharField(source='specialty.name', read_only=True)
     specialtyIcon = serializers.CharField(source='specialty.icon', read_only=True)
@@ -117,18 +117,17 @@ class DoctorSerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorProfile
         fields = (
-            'id', 'name', 'avatar', 'phone', 'email', 'specialtyId', 'specialtyName',
+            'id', 'userId', 'name', 'prefix', 'avatar', 'phone', 'specialtyId', 'specialtyName',
             'specialtyIcon', 'city', 'hospital', 'address', 'location', 'experienceYears',
             'rating', 'reviewsCount', 'fee', 'status', 'bio', 'workingHours', 'verified',
             'communication',
             'cardNumber', 'accountNumber', 'shaba',
         )
-        read_only_fields = ('id', 'rating', 'reviewsCount', 'status', 'verified')
+        read_only_fields = ('id', 'userId', 'rating', 'reviewsCount', 'status', 'verified')
 
 
 class DoctorProfileUpdateSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='user.display_name', required=False)
-    email = serializers.EmailField(source='user.email', required=False, allow_blank=True)
     avatar = serializers.URLField(source='user.avatar', required=False, allow_blank=True)
     specialtyId = serializers.PrimaryKeyRelatedField(
         source='specialty', queryset=Specialty.objects.all(), required=False
@@ -140,7 +139,7 @@ class DoctorProfileUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = DoctorProfile
         fields = (
-            'name', 'email', 'avatar', 'specialtyId', 'city', 'hospital', 'address',
+            'name', 'prefix', 'avatar', 'specialtyId', 'city', 'hospital', 'address',
             'location', 'experienceYears', 'fee', 'bio', 'cardNumber', 'accountNumber', 'shaba',
         )
 

@@ -25,7 +25,9 @@ class Appointment(models.Model):
     status = models.CharField(max_length=16, choices=STATUS_CHOICES, default='pending-payment')
     reason = models.TextField(blank=True)
     consult_type = models.CharField(max_length=5, choices=CONSULT_CHOICES, default='video')
+    is_follow_up = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
+    started_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         db_table = 'appointments'

@@ -16,7 +16,7 @@ urlpatterns = [
     ),
     path(
         'me/working-hours/',
-        DoctorMeViewSet.as_view({'get': 'working_hours', 'post': 'working_hours'}),
+        DoctorMeViewSet.as_view({'get': 'working_hours', 'post': 'working_hours', 'put': 'working_hours'}),
         name='doctor-working-hours',
     ),
     path(

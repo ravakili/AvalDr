@@ -4,6 +4,7 @@ from django.conf import settings
 
 class DoctorProfile(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='doctor_profile')
+    prefix = models.CharField(max_length=20, blank=True, default='دکتر')
     specialty = models.ForeignKey('admin_panel.Specialty', on_delete=models.PROTECT, related_name='doctors')
     city = models.CharField(max_length=50)
     hospital = models.CharField(max_length=100, blank=True)

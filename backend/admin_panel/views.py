@@ -12,11 +12,13 @@ from accounts.serializers import PatientProfileSerializer, UserSerializer
 from appointments.models import Appointment
 from config.permissions import IsPlatformAdmin
 from config.serializers import EmptySerializer
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from doctors.models import DoctorProfile
 from doctors.serializers import DoctorSerializer
 from medical.models import MedicalRecord
 from medical.serializers import MedicalRecordSerializer
 from payments.models import Payment
+from notifications.services import notify
 
 from .models import (
     AuditLog,
@@ -91,6 +93,13 @@ class WithdrawalViewSet(viewsets.ReadOnlyModelViewSet):
             request, f'withdrawal.{decision}', 'withdrawal', str(withdrawal.pk),
             f'{withdrawal.amount} تومان',
         )
+        notify(
+            withdrawal.doctor.user,
+            'نتیجه درخواست برداشت',
+            'درخواست برداشت شما تأیید شد.' if decision == 'approved' else 'درخواست برداشت شما رد شد.',
+            'withdrawal',
+            {'withdrawalId': str(withdrawal.pk), 'status': decision},
+        )
         return Response(self.get_serializer(withdrawal).data)
 
     def _audit(self, request, action, target, target_name, details):
@@ -162,6 +171,13 @@ class UserManageViewSet(viewsets.ReadOnlyModelViewSet):
         user.patient_profile.suspended = True
         user.patient_profile.save(update_fields=('suspended',))
         user.save(update_fields=('is_active',))
+        notify(
+            user,
+            'حساب کاربری تعلیق شد',
+            'حساب شما توسط مدیر سیستم تعلیق شده است.',
+            'account',
+            {'status': 'suspended'},
+        )
         return Response({'status': 'suspended'})
 
     @action(detail=True, methods=('post',))
@@ -171,6 +187,13 @@ class UserManageViewSet(viewsets.ReadOnlyModelViewSet):
         user.patient_profile.suspended = False
         user.patient_profile.save(update_fields=('suspended',))
         user.save(update_fields=('is_active',))
+        notify(
+            user,
+            'حساب کاربری فعال شد',
+            'حساب شما دوباره فعال شده است.',
+            'account',
+            {'status': 'active'},
+        )
         return Response({'status': 'active'})
 
 
@@ -205,7 +228,59 @@ class DoctorManageViewSet(viewsets.ReadOnlyModelViewSet):
             target_name=doctor.user.display_name,
             details=f'Doctor status changed to {next_status}',
         )
+        notify(
+            doctor.user,
+            'وضعیت حساب پزشک تغییر کرد',
+            {
+                'approved': 'حساب پزشک شما تأیید شد.',
+                'pending': 'حساب پزشک شما در انتظار بررسی قرار گرفت.',
+                'suspended': 'حساب پزشک شما تعلیق شد.',
+            }[next_status],
+            'account',
+            {'doctorId': str(doctor.pk), 'status': next_status},
+        )
         return Response(self.get_serializer(doctor).data)
+
+
+class AdminMeViewSet(viewsets.GenericViewSet):
+    permission_classes = (IsPlatformAdmin,)
+    serializer_class = EmptySerializer
+    parser_classes = (JSONParser, MultiPartParser, FormParser)
+
+    def _save_avatar(self, user, avatar, request=None):
+        if hasattr(avatar, 'read'):
+            import uuid
+            from django.conf import settings
+            from django.core.files.storage import default_storage
+            ext = avatar.name.rsplit('.', 1)[-1] if '.' in avatar.name else 'jpg'
+            path = default_storage.save(f'avatars/{uuid.uuid4().hex}.{ext}', avatar)
+            url = settings.MEDIA_URL + path
+            user.avatar = request.build_absolute_uri(url) if request else url
+            user.save(update_fields=['avatar'])
+
+    def list(self, request):
+        return Response({
+            'name': request.user.display_name,
+            'phone': request.user.phone,
+            'avatar': request.user.avatar,
+        })
+
+    def partial_update(self, request):
+        user = request.user
+        avatar_file = request.FILES.get('avatar')
+        name = request.data.get('name')
+        if name:
+            parts = name.strip().split(maxsplit=1)
+            user.first_name = parts[0]
+            user.last_name = parts[1] if len(parts) > 1 else ''
+        if avatar_file:
+            self._save_avatar(user, avatar_file, request)
+        user.save()
+        return Response({
+            'name': user.display_name,
+            'phone': user.phone,
+            'avatar': user.avatar,
+        })
 
 
 class AdminDashboardView(viewsets.GenericViewSet):

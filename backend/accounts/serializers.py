@@ -28,18 +28,20 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('id', 'name', 'role', 'avatar', 'phone', 'email', 'refId')
+        fields = ('id', 'name', 'role', 'avatar', 'phone', 'refId')
 
 
 class PatientProfileSerializer(serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
+    userId = serializers.CharField(source='user.pk', read_only=True)
     name = serializers.CharField(source='full_name')
     phone = serializers.CharField(source='user.phone', read_only=True)
-    email = serializers.EmailField(source='user.email', required=False, allow_blank=True)
     avatar = serializers.URLField(source='user.avatar', required=False, allow_blank=True)
     nationalId = serializers.CharField(source='national_id', required=False, allow_blank=True)
     dateOfBirth = serializers.DateField(source='birth_date', required=False, allow_null=True)
     bloodType = serializers.CharField(source='blood_type', required=False, allow_blank=True)
+    insuranceType = serializers.CharField(source='insurance_type', required=False, allow_blank=True)
+    supplementaryInsurance = serializers.CharField(source='supplementary_insurance', required=False, allow_blank=True)
     emergencyContact = serializers.JSONField(source='emergency_contact', required=False)
     receiveNotifications = serializers.BooleanField(source='receive_notifications', required=False)
     receivePromotions = serializers.BooleanField(source='receive_promotions', required=False)
@@ -49,11 +51,12 @@ class PatientProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = PatientProfile
         fields = (
-            'id', 'name', 'avatar', 'phone', 'email', 'nationalId', 'dateOfBirth',
-            'gender', 'city', 'bloodType', 'emergencyContact', 'receiveNotifications',
+            'id', 'userId', 'name', 'avatar', 'phone', 'nationalId', 'dateOfBirth',
+            'gender', 'city', 'bloodType', 'insuranceType', 'supplementaryInsurance',
+            'emergencyContact', 'receiveNotifications',
             'receivePromotions', 'age', 'medicalHistory', 'suspended',
         )
-        read_only_fields = ('id', 'suspended')
+        read_only_fields = ('id', 'userId', 'suspended')
 
     @extend_schema_field(serializers.IntegerField)
     def get_age(self, obj):
@@ -93,10 +96,11 @@ class VerifyOTPSerializer(SendOTPSerializer):
 
 class CompleteProfileSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=100)
-    email = serializers.EmailField(required=False, allow_blank=True)
     dateOfBirth = serializers.DateField(required=False, allow_null=True)
     gender = serializers.ChoiceField(choices=('male', 'female'), required=False, allow_blank=True)
     bloodType = serializers.CharField(max_length=5, required=False, allow_blank=True)
+    insuranceType = serializers.CharField(max_length=50, required=False, allow_blank=True)
+    supplementaryInsurance = serializers.CharField(max_length=50, required=False, allow_blank=True)
     allergies = serializers.ListField(child=serializers.CharField(max_length=100), required=False)
     chronicConditions = serializers.ListField(child=serializers.CharField(max_length=100), required=False)
     emergencyContact = serializers.JSONField(required=False)
@@ -131,7 +135,6 @@ class CompleteProfileSerializer(serializers.Serializer):
         name_parts = data['name'].strip().split(maxsplit=1)
         user.first_name = name_parts[0]
         user.last_name = name_parts[1] if len(name_parts) > 1 else ''
-        user.email = data.get('email', '')
         user.username = user.phone
         user.role = 'doctor' if data['isDoctor'] else 'user'
         user.save()
@@ -141,6 +144,7 @@ class CompleteProfileSerializer(serializers.Serializer):
             profile, _ = DoctorProfile.objects.update_or_create(
                 user=user,
                 defaults={
+                    'prefix': 'دکتر',
                     'specialty': data['specialty'],
                     'city': data.get('city', ''),
                     'hospital': data.get('hospital', ''),
@@ -157,6 +161,8 @@ class CompleteProfileSerializer(serializers.Serializer):
                     'birth_date': data.get('dateOfBirth'),
                     'gender': data.get('gender', ''),
                     'blood_type': data.get('bloodType', ''),
+                    'insurance_type': data.get('insuranceType', ''),
+                    'supplementary_insurance': data.get('supplementaryInsurance', ''),
                     'emergency_contact': data.get('emergencyContact', {}),
                     'receive_notifications': data.get('receiveNotifications', True),
                     'receive_promotions': data.get('receivePromotions', False),

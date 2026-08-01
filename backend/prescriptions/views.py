@@ -8,6 +8,7 @@ from admin_panel.serializers import DrugSuggestionSerializer
 from appointments.models import Appointment
 from chat.models import ChatMessage
 from config.permissions import IsActiveUser
+from notifications.services import notify
 
 from .models import Prescription
 from .serializers import PrescriptionSerializer
@@ -25,10 +26,15 @@ class PrescriptionViewSet(viewsets.ModelViewSet):
         user = self.request.user
         queryset = Prescription.objects.prefetch_related('items')
         if user.role == 'doctor':
-            return queryset.filter(doctor__user=user)
-        if user.role == 'admin':
-            return queryset
-        return queryset.filter(patient=user)
+            queryset = queryset.filter(doctor__user=user)
+        elif user.role == 'admin':
+            queryset = queryset
+        else:
+            queryset = queryset.filter(patient=user)
+        appointment_id = self.request.query_params.get('appointmentId')
+        if appointment_id:
+            queryset = queryset.filter(appointment_id=appointment_id)
+        return queryset
 
     @transaction.atomic
     def create(self, request, *args, **kwargs):
@@ -53,6 +59,13 @@ class PrescriptionViewSet(viewsets.ModelViewSet):
             sender=request.user,
             text='نسخه پزشکی صادر شد.',
             message_type='prescription',
+        )
+        notify(
+            appointment.patient,
+            'نسخه جدید صادر شد',
+            f'{request.user.display_name} نسخه نوبت شما را ثبت کرد.',
+            'prescription',
+            {'appointmentId': str(appointment.pk), 'prescriptionId': str(prescription.pk)},
         )
         return Response(self.get_serializer(prescription).data, status=status.HTTP_201_CREATED)
 

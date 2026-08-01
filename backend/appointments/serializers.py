@@ -9,6 +9,7 @@ from doctors.models import CommunicationSetting
 from doctors.serializers import DoctorSerializer
 
 from .models import Appointment, VisitLog
+from .services import expire_stale_pending_payments
 
 
 class AppointmentSerializer(serializers.ModelSerializer):
@@ -19,6 +20,8 @@ class AppointmentSerializer(serializers.ModelSerializer):
     endTime = serializers.TimeField(source='end_time', format='%H:%M', read_only=True)
     consultType = serializers.CharField(source='consult_type')
     createdAt = serializers.DateTimeField(source='created_at', read_only=True)
+    startedAt = serializers.DateTimeField(source='started_at', read_only=True)
+    isFollowUp = serializers.BooleanField(source='is_follow_up', required=False, default=False)
     patient = serializers.SerializerMethodField()
     doctor = DoctorSerializer(read_only=True)
     paymentStatus = serializers.SerializerMethodField()
@@ -27,7 +30,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
         model = Appointment
         fields = (
             'id', 'patientId', 'doctorId', 'date', 'time', 'endTime', 'status',
-            'reason', 'consultType', 'createdAt', 'patient', 'doctor', 'paymentStatus',
+            'reason', 'consultType', 'createdAt', 'startedAt', 'isFollowUp', 'patient', 'doctor', 'paymentStatus',
         )
 
     @extend_schema_field(PatientProfileSerializer)
@@ -58,6 +61,7 @@ class AppointmentCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
+        expire_stale_pending_payments()
         doctor = attrs['doctor']
         consult_type = attrs['consult_type']
         try:

@@ -21,6 +21,17 @@ The API is available at `http://127.0.0.1:8000/api/v1/` and Swagger UI at
 Without `DB_HOST` and `REDIS_URL`, local development uses SQLite and an
 in-memory Channels layer. Docker Compose supplies PostgreSQL and Redis.
 
+For ZarinPal sandbox payments, set:
+
+```text
+ZARINPAL_SANDBOX=True
+ZARINPAL_MERCHANT_ID=<sandbox merchant id>
+ZARINPAL_CALLBACK_URL=http://localhost:5173/payment/callback
+```
+
+`ZARINPAL_MOCK=True` is reserved for automated tests and must not be enabled
+when testing the real sandbox redirect and verification flow.
+
 For the containerized stack:
 
 ```powershell

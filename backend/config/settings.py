@@ -1,8 +1,15 @@
 import os
+import configparser
 from pathlib import Path
 from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+ENV_FILE = BASE_DIR / '.env'
+if ENV_FILE.exists():
+    env_parser = configparser.ConfigParser(interpolation=None)
+    env_parser.read_string(f'[environment]\n{ENV_FILE.read_text(encoding="utf-8")}')
+    for key, value in env_parser['environment'].items():
+        os.environ.setdefault(key.upper(), value)
 SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', 'django-insecure-change-me-in-production')
 DEBUG = os.getenv('DJANGO_DEBUG', 'True') == 'True'
 ALLOWED_HOSTS = os.getenv('ALLOWED_HOSTS', '*').split(',')
@@ -164,6 +171,19 @@ RETURN_OTP_IN_DEBUG = os.getenv('RETURN_OTP_IN_DEBUG', 'True') == 'True'
 
 SMS_API_KEY = os.getenv('SMS_API_KEY', '')
 SMS_TEMPLATE_ID = int(os.getenv('SMS_TEMPLATE_ID', '123456'))
+
+ZARINPAL_SANDBOX = os.getenv('ZARINPAL_SANDBOX', 'True') == 'True'
+ZARINPAL_MERCHANT_ID = os.getenv(
+    'ZARINPAL_MERCHANT_ID',
+    'XXXXXXXX-XXXX-XXXX-XXXX-XXXXXXXXXXXX',
+)
+ZARINPAL_CALLBACK_URL = os.getenv(
+    'ZARINPAL_CALLBACK_URL',
+    'http://localhost:5173/payment/callback',
+)
+ZARINPAL_TIMEOUT_SECONDS = int(os.getenv('ZARINPAL_TIMEOUT_SECONDS', '15'))
+ZARINPAL_MOCK = os.getenv('ZARINPAL_MOCK', 'False') == 'True'
+PAYMENT_HOLD_MINUTES = int(os.getenv('PAYMENT_HOLD_MINUTES', '5'))
 
 if not DEBUG:
     SECURE_SSL_REDIRECT = os.getenv('SECURE_SSL_REDIRECT', 'True') == 'True'

@@ -29,8 +29,8 @@ class NotificationViewSet(viewsets.ReadOnlyModelViewSet):
     @action(detail=False, methods=('post',), url_path='mark-read')
     def mark_read(self, request):
         ids = request.data.get('ids', [])
-        self.get_queryset().filter(id__in=ids).update(read=True)
-        return Response({'updated': len(ids)})
+        updated = self.get_queryset().filter(id__in=ids, read=False).update(read=True)
+        return Response({'updated': updated})
 
     @action(detail=False, methods=('post',), url_path='mark-all-read')
     def mark_all_read(self, request):

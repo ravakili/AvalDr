@@ -3,6 +3,7 @@ from rest_framework.routers import DefaultRouter
 
 from .views import (
     AdminDashboardView,
+    AdminMeViewSet,
     AuditLogViewSet,
     DefinitionViewSet,
     DoctorManageViewSet,
@@ -30,5 +31,6 @@ router.register('doctors', DoctorManageViewSet, basename='admin-doctor')
 
 urlpatterns = [
     path('dashboard/', AdminDashboardView.as_view({'get': 'list'}), name='admin-dashboard'),
+    path('me/', AdminMeViewSet.as_view({'get': 'list', 'patch': 'partial_update'}), name='admin-me'),
     path('users-export/', UserExportView.as_view({'get': 'list'}), name='admin-user-export'),
 ] + router.urls

@@ -6,6 +6,8 @@ from .models import ChatMessage
 class ChatMessageSerializer(serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
     senderId = serializers.CharField(source='sender_id', read_only=True)
+    senderName = serializers.CharField(source='sender.display_name', read_only=True)
+    senderRole = serializers.CharField(source='sender.role', read_only=True)
     time = serializers.DateTimeField(source='created_at', read_only=True)
     type = serializers.CharField(source='message_type')
     fileUrl = serializers.SerializerMethodField()
@@ -13,7 +15,10 @@ class ChatMessageSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = ChatMessage
-        fields = ('id', 'senderId', 'text', 'time', 'type', 'fileUrl', 'fileName', 'file')
+        fields = (
+            'id', 'senderId', 'senderName', 'senderRole', 'text', 'time',
+            'type', 'fileUrl', 'fileName', 'file',
+        )
         extra_kwargs = {'file': {'write_only': True, 'required': False}}
         read_only_fields = ('id', 'senderId', 'time')
 

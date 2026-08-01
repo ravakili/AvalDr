@@ -9,6 +9,8 @@ from accounts.models import PatientProfile
 from admin_panel.models import Specialty
 from appointments.models import Appointment
 from doctors.models import CommunicationSetting, DoctorProfile, WorkingHour
+from notifications.models import Notification
+from payments.models import Payment
 
 User = get_user_model()
 
@@ -143,7 +145,8 @@ def test_public_doctor_contract_and_available_slots(doctor):
 
 
 @pytest.mark.django_db
-def test_booking_payment_consultation_chat_and_prescription(patient, doctor):
+def test_booking_payment_consultation_chat_and_prescription(settings, patient, doctor):
+    settings.ZARINPAL_MOCK = True
     target = date.today() + timedelta(days=1)
     patient_client = authenticated_client(patient)
     doctor_client = authenticated_client(doctor.user)
@@ -169,7 +172,7 @@ def test_booking_payment_consultation_chat_and_prescription(patient, doctor):
 
     paid = patient_client.post(
         f"/api/v1/payments/{payment.data['id']}/verify/",
-        {'success': True, 'cardNumber': '6037997512345678'},
+        {'authority': payment.data['authority'], 'status': 'OK'},
         format='json',
     )
     assert paid.status_code == 200
@@ -224,3 +227,44 @@ def test_admin_endpoints_require_admin(patient, doctor, admin_user):
     doctor.refresh_from_db()
     assert doctor.status == 'suspended'
     assert doctor.user.is_active is False
+
+
+@pytest.mark.django_db
+def test_paid_appointment_cancel_is_refunded_and_notifies_users(settings, patient, doctor):
+    settings.ZARINPAL_MOCK = True
+    patient_client = authenticated_client(patient)
+    target = date.today() + timedelta(days=2)
+    booked = patient_client.post(
+        '/api/v1/appointments/',
+        {
+            'doctorId': doctor.pk,
+            'date': target.isoformat(),
+            'time': '12:00',
+            'reason': 'پیگیری',
+            'consultType': 'chat',
+        },
+        format='json',
+    )
+    payment_response = patient_client.post(
+        f"/api/v1/appointments/{booked.data['id']}/payment/",
+        {},
+        format='json',
+    )
+    patient_client.post(
+        f"/api/v1/payments/{payment_response.data['id']}/verify/",
+        {'authority': payment_response.data['authority'], 'status': 'OK'},
+        format='json',
+    )
+
+    cancelled = patient_client.post(f"/api/v1/appointments/{booked.data['id']}/cancel/")
+
+    assert cancelled.status_code == 200
+    assert cancelled.data['status'] == 'cancelled'
+    assert cancelled.data['refundStatus'] == 'refunded'
+    payment = Payment.objects.get(pk=payment_response.data['id'])
+    assert payment.status == 'refunded'
+    assert payment.refund_amount == payment.amount
+    assert Notification.objects.filter(
+        user=patient,
+        data__appointmentId=str(booked.data['id']),
+    ).exists()

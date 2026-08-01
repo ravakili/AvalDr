@@ -102,8 +102,6 @@ class AccountViewSet(viewsets.GenericViewSet):
     def me(self, request):
         if request.method == 'PATCH':
             user = request.user
-            if 'email' in request.data:
-                user.email = request.data['email']
             if 'avatar' in request.data:
                 self._save_avatar(user, request.data['avatar'], request)
             if 'name' in request.data:

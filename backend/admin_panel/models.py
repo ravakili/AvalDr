@@ -24,9 +24,12 @@ class Definition(models.Model):
         ('gender', 'جنسیت'),
         ('blood_type', 'گروه خونی'),
         ('marital_status', 'وضعیت تأهل'),
+        ('insurance_type', 'نوع بیمه درمانی'),
+        ('supplementary_insurance', 'بیمه تکمیلی'),
+        ('prefix', 'پیشوند'),
     )
 
-    type = models.CharField(max_length=15, choices=TYPE_CHOICES)
+    type = models.CharField(max_length=30, choices=TYPE_CHOICES)
     name = models.CharField(max_length=100)
 
     class Meta:

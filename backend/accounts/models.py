@@ -49,6 +49,8 @@ class PatientProfile(models.Model):
     gender = models.CharField(max_length=6, choices=(('male', 'آقا'), ('female', 'خانم')), blank=True)
     city = models.CharField(max_length=50, blank=True)
     blood_type = models.CharField(max_length=5, blank=True)
+    insurance_type = models.CharField(max_length=50, blank=True)
+    supplementary_insurance = models.CharField(max_length=50, blank=True)
     emergency_contact = models.JSONField(default=dict, blank=True)
     receive_notifications = models.BooleanField(default=True)
     receive_promotions = models.BooleanField(default=False)

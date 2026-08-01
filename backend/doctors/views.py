@@ -4,12 +4,14 @@ from django.db.models import Q
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 
 from admin_panel.models import Specialty, WithdrawalRequest
 from admin_panel.serializers import SpecialtySerializer, WithdrawalSerializer
 from appointments.models import Appointment
+from appointments.services import expire_stale_pending_payments
 from config.permissions import IsDoctor
 
 from .models import CommunicationSetting, DoctorDocument, DoctorProfile, WorkingHour
@@ -50,6 +52,7 @@ class DoctorViewSet(viewsets.ReadOnlyModelViewSet):
 
     @action(detail=True, methods=('get',), url_path='slots')
     def slots(self, request, pk=None):
+        expire_stale_pending_payments()
         doctor = self.get_object()
         try:
             target = date.fromisoformat(request.query_params.get('date', str(date.today())))
@@ -92,6 +95,7 @@ class DoctorViewSet(viewsets.ReadOnlyModelViewSet):
 class DoctorMeViewSet(viewsets.GenericViewSet):
     permission_classes = (IsDoctor,)
     serializer_class = DoctorSerializer
+    parser_classes = (JSONParser, MultiPartParser, FormParser)
 
     def _save_avatar(self, user, avatar, request=None):
         if hasattr(avatar, 'read'):
@@ -115,10 +119,11 @@ class DoctorMeViewSet(viewsets.GenericViewSet):
 
     def partial_update(self, request):
         profile = self._profile(request)
-        data = request.data.copy() if hasattr(request.data, 'copy') else dict(request.data)
-        avatar_file = None
-        if 'avatar' in data and hasattr(data['avatar'], 'read'):
-            avatar_file = data.pop('avatar')
+        avatar_file = request.FILES.get('avatar')
+        if avatar_file or request.FILES:
+            data = {k: request.data[k] for k in request.data if k not in request.FILES}
+        else:
+            data = request.data
         serializer = DoctorProfileUpdateSerializer(profile, data=data, partial=True)
         serializer.is_valid(raise_exception=True)
         serializer.save()
@@ -138,7 +143,7 @@ class DoctorMeViewSet(viewsets.GenericViewSet):
             serializer.save()
         return Response(CommunicationSettingSerializer(settings_obj).data)
 
-    @action(detail=False, methods=('get', 'post'), url_path='working-hours')
+    @action(detail=False, methods=('get', 'post', 'put'), url_path='working-hours')
     def working_hours(self, request):
         profile = self._profile(request)
         if request.method == 'POST':
@@ -146,6 +151,12 @@ class DoctorMeViewSet(viewsets.GenericViewSet):
             serializer.is_valid(raise_exception=True)
             working_hour = serializer.save(doctor=profile)
             return Response(WorkingHourSerializer(working_hour).data, status=201)
+        if request.method == 'PUT':
+            profile.working_hours.all().delete()
+            serializer = WorkingHourSerializer(data=request.data, many=True, context={'doctor': profile})
+            serializer.is_valid(raise_exception=True)
+            serializer.save(doctor=profile)
+            return Response(WorkingHourSerializer(profile.working_hours.all(), many=True).data)
         return Response(WorkingHourSerializer(profile.working_hours.all(), many=True).data)
 
     @action(
