@@ -75,7 +75,7 @@ interface Props {
 }
 
 export default function DashboardLayout({ role }: Props) {
-  useBackendData(role);
+  const backendVersion = useBackendData(role);
   const user = useAuthStore((s) => s.user);
   const [mobileOpen, setMobileOpen] = useState(false);
   const { pathname } = useLocation();
@@ -121,7 +121,7 @@ export default function DashboardLayout({ role }: Props) {
           onMenu={() => setMobileOpen(true)}
         />
         <div className="flex-1 animate-fade-in pb-20 lg:pb-0 ">
-          <Outlet />
+          <Outlet key={`${role}-${backendVersion}`} />
         </div>
       </main>
 

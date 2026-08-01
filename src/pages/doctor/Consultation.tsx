@@ -31,6 +31,7 @@ import { cn, formatDateFa, toFa } from '../../lib/utils'
 import type { ChatMessage } from '../../types'
 import { MdOutlineKeyboardArrowRight } from 'react-icons/md'
 import { User } from 'lucide-react'
+import { toast } from '../../store/toastStore'
 
 export default function Consultation() {
   const { appointmentId } = useParams()
@@ -117,8 +118,9 @@ export default function Consultation() {
       )
       setMessages((items) => [...items, message])
       setDraft('')
+      toast.success('پیام ارسال شد')
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'ارسال پیام انجام نشد')
+      toast.error('ارسال پیام انجام نشد', error instanceof Error ? error.message : undefined)
     }
   }
 
@@ -139,8 +141,9 @@ export default function Consultation() {
       setRxItems([{ drug: '', usage: '' }])
       setRxNotes('')
       await refreshBackendData('doctor')
+      toast.success('نسخه ثبت شد', 'نسخه برای بیمار ارسال شد.')
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'ثبت نسخه انجام نشد')
+      toast.error('ثبت نسخه انجام نشد', error instanceof Error ? error.message : undefined)
     }
   }
 

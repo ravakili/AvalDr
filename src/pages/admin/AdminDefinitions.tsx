@@ -14,6 +14,7 @@ import {
 } from '../../components/ui/icons'
 import { api } from '../../lib/api'
 import type { Specialty, HealthTip } from '../../types'
+import { toast } from '../../store/toastStore'
 
 type Tab = 'specialties' | 'diagnoses' | 'allergies' | 'drugs' | 'cities' | 'insurance_type' | 'supplementary_insurance' | 'prefix' | 'tips'
 
@@ -43,6 +44,13 @@ const tabs: { key: Tab; label: string }[] = [
   { key: 'prefix', label: 'پیشوند' },
   { key: 'tips', label: 'نکات' },
 ]
+
+function extractResults<T>(response: T | { results: T }): T {
+  if (response && typeof response === 'object' && 'results' in response) {
+    return (response as { results: T }).results
+  }
+  return response as T
+}
 
 export default function AdminDefinitions() {
   const [tab, setTab] = useState<Tab>('specialties')
@@ -74,20 +82,21 @@ export default function AdminDefinitions() {
       setLoading(true)
       if (tab === 'specialties') {
         const data = await api.get<Specialty[]>('/admin/specialties/')
-        setSpecialties(data)
+        setSpecialties(extractResults(data))
       } else if (tab === 'tips') {
         const data = await api.get<HealthTip[]>('/admin/health-tips/')
-        setTips(data)
+        setTips(extractResults(data))
       } else {
         const data = await api.get<NamedItem[]>(`/admin/definitions/?type=${typeMap[tab] || tab}`)
+        const items = extractResults(data)
         switch (tab) {
-          case 'diagnoses': setDiagnoses(data); break
-          case 'allergies': setAllergies(data); break
-          case 'drugs': setDrugs(data); break
-          case 'cities': setCities(data); break
-          case 'insurance_type': setInsuranceTypes(data); break
-          case 'supplementary_insurance': setSupplementaryInsurances(data); break
-          case 'prefix': setPrefixes(data); break
+          case 'diagnoses': setDiagnoses(items); break
+          case 'allergies': setAllergies(items); break
+          case 'drugs': setDrugs(items); break
+          case 'cities': setCities(items); break
+          case 'insurance_type': setInsuranceTypes(items); break
+          case 'supplementary_insurance': setSupplementaryInsurances(items); break
+          case 'prefix': setPrefixes(items); break
         }
       }
     } catch (err) {
@@ -154,8 +163,9 @@ export default function AdminDefinitions() {
         }
         await loadTabData()
         setOpen(false)
+        toast.success(editId ? 'تخصص ویرایش شد' : 'تخصص افزوده شد')
       } catch (err) {
-        console.error(err)
+        toast.error('ذخیره تخصص انجام نشد', err instanceof Error ? err.message : undefined)
       }
     } else if (tab === 'tips') {
       if (!tipTitle.trim()) return
@@ -167,8 +177,9 @@ export default function AdminDefinitions() {
         }
         await loadTabData()
         setOpen(false)
+        toast.success(editId ? 'نکته سلامت ویرایش شد' : 'نکته سلامت افزوده شد')
       } catch (err) {
-        console.error(err)
+        toast.error('ذخیره نکته سلامت انجام نشد', err instanceof Error ? err.message : undefined)
       }
     } else {
       if (!name.trim()) return
@@ -180,8 +191,9 @@ export default function AdminDefinitions() {
         }
         await loadTabData()
         setOpen(false)
+        toast.success(editId ? `${label().single} ویرایش شد` : `${label().single} افزوده شد`)
       } catch (err) {
-        console.error(err)
+        toast.error(`ذخیره ${label().single} انجام نشد`, err instanceof Error ? err.message : undefined)
       }
     }
   }
@@ -196,8 +208,9 @@ export default function AdminDefinitions() {
         await api.delete(`/admin/definitions/${id}/`)
       }
       await loadTabData()
+      toast.success(`${label().single} حذف شد`)
     } catch (err) {
-      console.error(err)
+      toast.error(`حذف ${label().single} انجام نشد`, err instanceof Error ? err.message : undefined)
     }
   }
 

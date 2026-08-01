@@ -21,6 +21,7 @@ import {
 import { roleLabel } from "../../components/layout/nav";
 import type { MedicalRecord } from "../../types";
 import { api } from "../../lib/api";
+import { toast } from "../../store/toastStore";
 
 type Section = "personal" | "medical" | "reports" | "notifications";
 type CategoryKey = "diagnoses" | "allergies" | "medications";
@@ -90,7 +91,7 @@ export default function UserProfile() {
         const types = ['city', 'insurance_type', 'supplementary_insurance', 'diagnosis', 'allergy', 'drug'];
         const results = await Promise.all(
           types.map(async (t) => {
-            const data = await api.get<{ id: string; name: string }[]>(`/admin/definitions/?type=${t}`);
+            const data = await api.get<{ id: string; name: string }[]>(`/common/definitions/?type=${t}`);
             return [t, data] as [string, { id: string; name: string }[]];
           })
         );
@@ -107,7 +108,12 @@ export default function UserProfile() {
   const handleAvatarChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    await uploadAvatar(file);
+    try {
+      await uploadAvatar(file);
+      toast.success("عکس پروفایل به‌روزرسانی شد");
+    } catch (error) {
+      toast.error("خطا در آپلود عکس", error instanceof Error ? error.message : undefined);
+    }
   };
 
   const handleSavePersonal = async () => {
@@ -125,8 +131,10 @@ export default function UserProfile() {
     }
     try {
       await saveProfile(payload);
-      alert("اطلاعات با موفقیت ذخیره شد.");
-    } catch { alert("خطا در ذخیره اطلاعات"); }
+      toast.success("اطلاعات با موفقیت ذخیره شد");
+    } catch (error) {
+      toast.error("خطا در ذخیره اطلاعات", error instanceof Error ? error.message : undefined);
+    }
   };
 
   const addEntry = (key: CategoryKey, value: string) => {
@@ -148,8 +156,10 @@ export default function UserProfile() {
     };
     try {
       await saveMedicalRecord(payload);
-      alert("پرونده پزشکی با موفقیت ذخیره شد.");
-    } catch { alert("خطا در ذخیره پرونده"); }
+      toast.success("پرونده پزشکی ذخیره شد");
+    } catch (error) {
+      toast.error("خطا در ذخیره پرونده", error instanceof Error ? error.message : undefined);
+    }
   };
 
   const handleReportSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -165,10 +175,14 @@ export default function UserProfile() {
   };
 
   const handleSaveNotifPrefs = async () => {
-    for (const p of preferences) {
-      if (p.id) await savePreference(p.id, p.enabled);
+    try {
+      for (const p of preferences) {
+        if (p.id) await savePreference(p.id, p.enabled);
+      }
+      toast.success("تنظیمات اعلان‌ها ذخیره شد");
+    } catch (error) {
+      toast.error("خطا در ذخیره تنظیمات اعلان‌ها", error instanceof Error ? error.message : undefined);
     }
-    alert("تنظیمات اعلان‌ها ذخیره شد.");
   };
 
   return (

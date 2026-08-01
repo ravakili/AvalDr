@@ -24,6 +24,7 @@ import type { AppointmentStatus } from '../../types'
 import { useAuthStore } from '../../store/authStore'
 import { useUserStore } from '../../store/userStore'
 import { api } from '../../lib/api'
+import { toast } from '../../store/toastStore'
 
 export default function MyAppointments() {
   const navigate = useNavigate()
@@ -39,9 +40,6 @@ export default function MyAppointments() {
   const [rescheduleId, setRescheduleId] = useState<string | null>(null)
   const [rescheduleTime, setRescheduleTime] = useState('')
   const [cancelId, setCancelId] = useState<string | null>(null)
-  const [payingId, setPayingId] = useState<string | null>(null)
-  const [paymentStep, setPaymentStep] = useState<'form' | 'processing' | 'success' | 'failed'>('form')
-  const [cardNumber, setCardNumber] = useState('')
 
   const todayStr = new Date().toISOString().slice(0, 10)
 
@@ -70,53 +68,29 @@ export default function MyAppointments() {
     try {
       const appt = appointments.find((a) => a.id === cancelId)
       if (!appt) return
-      const apptTime = new Date(`${appt.date}T${appt.time}`).getTime()
-      const now = Date.now()
-      const hoursDiff = (apptTime - now) / 3600000
-      const hasPenalty = hoursDiff < 4
-      if (hasPenalty) {
-        const fee = 100000
-        const penalty = Math.round(fee * 0.15)
-        alert(`لغو نوبت با کسر ۱۵٪ جریمه (${formatToman(penalty)}) انجام شد.`)
-      }
-      await api.post(`/appointments/${cancelId}/cancel/`)
-      updateAppt(cancelId, { status: 'cancelled' })
+      const result = await api.post<{ refundStatus?: string }>(`/appointments/${cancelId}/cancel/`)
+      updateAppt(cancelId, { status: 'cancelled', refundStatus: result.refundStatus })
       setCancelId(null)
-    } catch { alert('خطا در لغو نوبت') }
-  }
-
-  const handlePayment = async (apptId: string) => {
-    setPayingId(apptId)
-    setPaymentStep('form')
-    setCardNumber('')
-  }
-
-  const submitPayment = async () => {
-    if (!payingId) return
-    setPaymentStep('processing')
-    try {
-      const payment = await api.post<{ id: string }>(`/appointments/${payingId}/payment/`)
-      const success = Math.random() > 0.15
-      await api.post(`/payments/${payment.id}/verify/`, { success, cardNumber })
-      if (success) {
-        updateAppt(payingId, { status: 'waiting' })
-        setPaymentStep('success')
+      if (result.refundStatus === 'refunded') {
+        toast.success('نوبت لغو شد', 'مبلغ پرداختی از طریق زرین‌پال بازپرداخت شد.')
+      } else if (result.refundStatus === 'refund-failed') {
+        toast.warning('نوبت لغو شد', 'بازپرداخت ناموفق بود و برای پیگیری به ادمین اطلاع داده شد.')
       } else {
-        setPaymentStep('failed')
+        toast.success('نوبت لغو شد')
       }
-    } catch {
-      setPaymentStep('failed')
+    } catch (error) {
+      toast.error('خطا در لغو نوبت', error instanceof Error ? error.message : undefined)
     }
   }
 
-  const closePayment = () => {
-    setPayingId(null)
-    setPaymentStep('form')
-  }
-
-  const formatCard = (v: string) => {
-    const d = v.replace(/\D/g, '').slice(0, 16)
-    return d.replace(/(.{4})/g, '$1 ').trim()
+  const handlePayment = async (apptId: string) => {
+    try {
+      const payment = await api.post<{ gatewayUrl: string }>(`/appointments/${apptId}/payment/`)
+      toast.info('انتقال به درگاه', 'برای پرداخت به سندباکس زرین‌پال منتقل می‌شوید.')
+      window.location.assign(payment.gatewayUrl)
+    } catch (error) {
+      toast.error('اتصال به درگاه انجام نشد', error instanceof Error ? error.message : undefined)
+    }
   }
 
   return (
@@ -289,76 +263,6 @@ export default function MyAppointments() {
         </div>
       </Modal>
 
-      {/* Payment Modal */}
-      <Modal
-        open={!!payingId}
-        onClose={closePayment}
-        title="پرداخت نوبت"
-        footer={
-          paymentStep === 'failed' ? (
-            <>
-              <PrimaryButton onClick={submitPayment}>تلاش مجدد</PrimaryButton>
-              <PrimaryButton variant="ghost" onClick={closePayment}>بازگشت</PrimaryButton>
-            </>
-          ) : paymentStep === 'success' ? (
-            <PrimaryButton onClick={closePayment}>تأیید</PrimaryButton>
-          ) : undefined
-        }
-      >
-        {paymentStep === 'form' && (
-          <div className="space-y-4">
-            <div className="text-center">
-              <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-2xl bg-primary-100 text-primary-600">
-                <IconWallet className="h-6 w-6" />
-              </div>
-              <p className="text-xs text-ink-400">مبلغ: {formatToman(100000)}</p>
-            </div>
-            <div>
-              <label className="mb-1 block text-xs font-medium text-ink-600">شماره کارت</label>
-              <input
-                type="text"
-                inputMode="numeric"
-                placeholder="6037 9981 2345 6789"
-                value={formatCard(cardNumber)}
-                onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, '').slice(0, 16))}
-                className="glass-input w-full rounded-xl px-4 py-2.5 text-left text-sm tabular text-ink-800 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-200"
-                dir="ltr"
-              />
-            </div>
-            <PrimaryButton className="w-full" disabled={cardNumber.length < 16} onClick={submitPayment} icon={<IconWallet className="h-4 w-4" />}>
-              پرداخت
-            </PrimaryButton>
-            <button onClick={closePayment} className="w-full text-center text-xs text-ink-400 hover:text-ink-600">انصراف</button>
-          </div>
-        )}
-        {paymentStep === 'processing' && (
-          <div className="flex flex-col items-center gap-4 py-6 text-center">
-            <svg className="h-12 w-12 animate-spin text-primary-500" viewBox="0 0 24 24" fill="none">
-              <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
-            </svg>
-            <p className="font-medium text-ink-700">در حال اتصال به درگاه پرداخت...</p>
-          </div>
-        )}
-        {paymentStep === 'success' && (
-          <div className="flex flex-col items-center gap-3 py-4 text-center">
-            <div className="grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-emerald-600">
-              <IconCheck className="h-8 w-8" />
-            </div>
-            <h3 className="text-lg font-bold text-ink-800">پرداخت با موفقیت انجام شد</h3>
-            <p className="text-sm text-ink-500">نوبت شما تأیید شد.</p>
-          </div>
-        )}
-        {paymentStep === 'failed' && (
-          <div className="flex flex-col items-center gap-3 py-4 text-center">
-            <div className="grid h-16 w-16 place-items-center rounded-full bg-red-100 text-red-500">
-              <IconClose className="h-8 w-8" />
-            </div>
-            <h3 className="text-lg font-bold text-ink-800">پرداخت ناموفق</h3>
-            <p className="text-sm text-ink-500">تراکنش با خطا مواجه شد. مجدداً تلاش کنید.</p>
-          </div>
-        )}
-      </Modal>
-
       {/* Reschedule modal */}
       <Modal
         open={!!rescheduleId}
@@ -376,7 +280,10 @@ export default function MyAppointments() {
                   await fetchAppointments()
                   setRescheduleId(null)
                   setRescheduleTime('')
-                } catch { alert('خطا در تغییر زمان') }
+                  toast.success('زمان نوبت تغییر کرد')
+                } catch (error) {
+                  toast.error('خطا در تغییر زمان', error instanceof Error ? error.message : undefined)
+                }
               }}
             >
               تأیید تغییر

@@ -1,4 +1,4 @@
-import { useMemo, useState, useRef, useEffect, useCallback } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import GlassCard from '../../components/ui/GlassCard'
 import PrimaryButton from '../../components/ui/PrimaryButton'
@@ -21,8 +21,8 @@ import {
   IconWallet,
 } from '../../components/ui/icons'
 import { useAuthStore } from '../../store/authStore'
-import { useUserStore } from '../../store/userStore'
 import type { ConsultType, Appointment } from '../../types'
+import { toast } from '../../store/toastStore'
 
 const today = new Date()
 const nextDays = Array.from({ length: 7 }, (_, i) => {
@@ -50,25 +50,12 @@ export default function BookAppointment() {
   const navigate = useNavigate()
   const doctor = doctorId ? getDoctor(doctorId) : undefined
   const user = useAuthStore((s) => s.user)
-  const updateAppt = useUserStore((s) => s.updateAppointment)
-  const deleteAppt = useUserStore((s) => s.deleteAppointment)
 
   const [day, setDay] = useState(nextDays[0])
   const [time, setTime] = useState('')
   const [reason, setReason] = useState('')
   const [consultType, setConsultType] = useState<ConsultType>('video')
   const [rawSlots, setRawSlots] = useState<{ time: string; available: boolean }[]>([])
-
-  const [showPayment, setShowPayment] = useState(false)
-  const [paymentStep, setPaymentStep] = useState<'form' | 'processing' | 'success' | 'failed'>('form')
-  const [cardNumber, setCardNumber] = useState('')
-  const [cardMonth, setCardMonth] = useState('')
-  const [cardCvv, setCardCvv] = useState('')
-
-  const pendingApptRef = useRef<Appointment | null>(null)
-  const paymentIdRef = useRef<string | null>(null)
-  const cancelTimerRef = useRef<ReturnType<typeof setTimeout>>()
-  const [timeLeft, setTimeLeft] = useState(300)
 
   const isToday = day === nextDays[0]
   const currentTime = nowTimeStr()
@@ -98,41 +85,6 @@ export default function BookAppointment() {
       })
   }, [doctor, day])
 
-  // Auto-cancel timer
-  const startCancelTimer = useCallback(() => {
-    setTimeLeft(300)
-    const interval = setInterval(() => {
-      setTimeLeft((t) => {
-        if (t <= 1) {
-          clearInterval(interval)
-          return 0
-        }
-        return t - 1
-      })
-    }, 1000)
-    cancelTimerRef.current = setTimeout(() => {
-      if (pendingApptRef.current) {
-        api.delete(`/appointments/${pendingApptRef.current.id}/`).catch(() => {})
-        pendingApptRef.current = null
-      }
-      setShowPayment(false)
-      setPaymentStep('form')
-      setCardNumber('')
-      setCardMonth('')
-      setCardCvv('')
-    }, 300000)
-    return () => {
-      clearInterval(interval)
-      clearTimeout(cancelTimerRef.current)
-    }
-  }, [])
-
-  useEffect(() => {
-    return () => {
-      clearTimeout(cancelTimerRef.current)
-    }
-  }, [])
-
   if (!doctor) {
     return (
       <GlassCard className="p-8 text-center text-ink-500">
@@ -148,6 +100,7 @@ export default function BookAppointment() {
 
   const handleSubmit = async () => {
     if (!time || !user) return
+    let createdAppointment: Appointment | null = null
     try {
       const appt = await api.post<Appointment>('/appointments/', {
         doctorId: doctor.id,
@@ -156,68 +109,20 @@ export default function BookAppointment() {
         reason,
         consultType,
       })
-      const payment = await api.post<{ id: string }>(`/appointments/${appt.id}/payment/`)
-      pendingApptRef.current = appt
-      paymentIdRef.current = payment.id
-      setShowPayment(true)
-      setPaymentStep('form')
-      startCancelTimer()
+      createdAppointment = appt
+      const payment = await api.post<{ id: string; gatewayUrl: string }>(`/appointments/${appt.id}/payment/`)
+      toast.info('انتقال به درگاه', 'برای تکمیل رزرو به سندباکس زرین‌پال منتقل می‌شوید.')
+      window.location.assign(payment.gatewayUrl)
     } catch (error) {
-      alert(error instanceof Error ? error.message : 'ثبت نوبت انجام نشد')
-    }
-  }
-
-  const submitPayment = async () => {
-    if (!paymentIdRef.current) return
-    setPaymentStep('processing')
-    const success = Math.random() > 0.15
-    try {
-      await api.post(`/payments/${paymentIdRef.current}/verify/`, {
-        success,
-        cardNumber,
-        cardMonth,
-        cardCvv,
-      })
-      if (success && pendingApptRef.current) {
-        updateAppt(pendingApptRef.current.id, { status: 'waiting' })
-        setPaymentStep('success')
-        clearTimeout(cancelTimerRef.current)
-      } else {
-        if (pendingApptRef.current) {
-          updateAppt(pendingApptRef.current.id, { status: 'cancelled' })
-        }
-        setPaymentStep('failed')
-        clearTimeout(cancelTimerRef.current)
+      if (createdAppointment) {
+        toast.error(
+          'انتقال به درگاه ناموفق بود',
+          'نوبت شما ذخیره شد و از بخش «نوبت‌های من» می‌توانید پرداخت را مجدداً انجام دهید.',
+        )
+        return
       }
-      await refreshBackendData('user')
-    } catch {
-      if (pendingApptRef.current) {
-        updateAppt(pendingApptRef.current.id, { status: 'cancelled' })
-      }
-      setPaymentStep('failed')
-      clearTimeout(cancelTimerRef.current)
+      toast.error('ثبت نوبت انجام نشد', error instanceof Error ? error.message : undefined)
     }
-  }
-
-  const closePayment = async () => {
-    // Cancel payment - delete the appointment from DB
-    if (pendingApptRef.current && paymentStep !== 'success') {
-      try {
-        await api.delete(`/appointments/${pendingApptRef.current.id}/`)
-        if (pendingApptRef.current) deleteAppt(pendingApptRef.current.id)
-      } catch { /* ignore */ }
-    }
-    setShowPayment(false)
-    setPaymentStep('form')
-    setCardNumber('')
-    setCardMonth('')
-    setCardCvv('')
-    if (paymentStep === 'success') navigate('/user/appointments')
-  }
-
-  const formatCard = (v: string) => {
-    const d = v.replace(/\D/g, '').slice(0, 16)
-    return d.replace(/(.{4})/g, '$1 ').trim()
   }
 
   const commFee = {
@@ -396,127 +301,6 @@ export default function BookAppointment() {
         </GlassCard>
       </div>
 
-      {/* Payment Modal */}
-      {showPayment && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-ink-900/40 backdrop-blur-sm animate-fade-in" onClick={closePayment} />
-          <GlassCard variant="default" className="relative z-10 w-full max-w-sm animate-pop-in p-6">
-            {paymentStep === 'form' && (
-              <div className="mb-4 text-center">
-                <span className="text-xs text-ink-400">زمان باقی‌مانده برای پرداخت: </span>
-                <span className={`tabular text-sm font-bold ${timeLeft <= 60 ? 'text-red-500' : 'text-ink-700'}`}>
-                  {toFa(Math.floor(timeLeft / 60))}:{toFa(String(timeLeft % 60).padStart(2, '0'))}
-                </span>
-              </div>
-            )}
-
-            {paymentStep === 'form' && (
-              <div className="space-y-4">
-                <div className="text-center">
-                  <div className="mx-auto mb-2 grid h-12 w-12 place-items-center rounded-2xl bg-primary-100 text-primary-600">
-                    <IconWallet className="h-6 w-6" />
-                  </div>
-                  <h3 className="font-bold text-ink-800">پرداخت الکترونیک</h3>
-                  <p className="mt-1 text-xs text-ink-400">مبلغ {formatToman(commFee[consultType])}</p>
-                </div>
-
-                <div>
-                  <label className="mb-1 block text-xs font-medium text-ink-600">شماره کارت</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    placeholder="6037 9981 2345 6789"
-                    value={formatCard(cardNumber)}
-                    onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, '').slice(0, 16))}
-                    className="glass-input w-full rounded-xl px-4 py-2.5 text-left text-sm tabular text-ink-800 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-200"
-                    dir="ltr"
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-ink-600">ماه/سال</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="12/28"
-                      value={cardMonth}
-                      onChange={(e) => setCardMonth(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                      className="glass-input w-full rounded-xl px-4 py-2.5 text-left text-sm tabular text-ink-800 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-200"
-                      dir="ltr"
-                    />
-                  </div>
-                  <div>
-                    <label className="mb-1 block text-xs font-medium text-ink-600">CVV2</label>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      placeholder="1234"
-                      value={cardCvv}
-                      onChange={(e) => setCardCvv(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                      className="glass-input w-full rounded-xl px-4 py-2.5 text-left text-sm tabular text-ink-800 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-200"
-                      dir="ltr"
-                    />
-                  </div>
-                </div>
-
-                <button
-                  onClick={submitPayment}
-                  disabled={cardNumber.length < 16}
-                  className="flex w-full items-center justify-center gap-2 rounded-2xl bg-primary-500 py-3 text-sm font-bold text-white shadow-glass-sm transition hover:bg-primary-600 active:scale-[.98] disabled:bg-ink-300 disabled:cursor-not-allowed"
-                >
-                  <IconWallet className="h-5 w-5" />
-                  پرداخت {formatToman(commFee[consultType])}
-                </button>
-                <button onClick={closePayment} className="w-full text-center text-xs text-ink-400 hover:text-ink-600">انصراف و بازگشت</button>
-              </div>
-            )}
-
-            {paymentStep === 'processing' && (
-              <div className="flex flex-col items-center gap-4 py-6 text-center">
-                <svg className="h-12 w-12 animate-spin text-primary-500" viewBox="0 0 24 24" fill="none">
-                  <circle cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="3" strokeDasharray="31.4 31.4" strokeLinecap="round" />
-                </svg>
-                <p className="font-medium text-ink-700">در حال اتصال به درگاه پرداخت...</p>
-                <p className="text-xs text-ink-400">لطفاً صبر کنید</p>
-              </div>
-            )}
-
-            {paymentStep === 'success' && (
-              <div className="flex flex-col items-center gap-3 py-4 text-center">
-                <div className="grid h-16 w-16 place-items-center rounded-full bg-emerald-100 text-emerald-600">
-                  <IconCheck className="h-8 w-8" />
-                </div>
-                <h3 className="text-lg font-bold text-ink-800">پرداخت با موفقیت انجام شد</h3>
-                <p className="text-sm text-ink-500">
-                  نوبت شما با <b>{doctorName(doctor)}</b> در {new Intl.DateTimeFormat('fa-IR', { day: 'numeric', month: 'long' }).format(new Date(day))} ساعت <b className="tabular">{toFa(time)}</b> تایید شد.
-                </p>
-                <p className="text-xs text-ink-400">کد پیگیری: {toFa(Math.floor(Math.random() * 90000) + 10000)}</p>
-                <PrimaryButton className="mt-2 w-full" icon={<IconCheck />} onClick={closePayment}>
-                  مشاهده نوبت‌های من
-                </PrimaryButton>
-              </div>
-            )}
-
-            {paymentStep === 'failed' && (
-              <div className="flex flex-col items-center gap-3 py-4 text-center">
-                <div className="grid h-16 w-16 place-items-center rounded-full bg-red-100 text-red-500">
-                  <IconClose className="h-8 w-8" />
-                </div>
-                <h3 className="text-lg font-bold text-ink-800">پرداخت ناموفق</h3>
-                <p className="text-sm text-ink-500">متأسفانه تراکنش با خطا مواجه شد. لطفاً مجدداً تلاش کنید.</p>
-                <div className="mt-2 flex w-full flex-col gap-2">
-                  <PrimaryButton className="w-full" onClick={submitPayment}>
-                    تلاش مجدد
-                  </PrimaryButton>
-                  <PrimaryButton variant="ghost" className="w-full" onClick={closePayment}>
-                    بازگشت به صفحه نوبت
-                  </PrimaryButton>
-                </div>
-              </div>
-            )}
-          </GlassCard>
-        </div>
-      )}
     </div>
   )
 }

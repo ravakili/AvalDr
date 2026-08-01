@@ -11,6 +11,7 @@ import { doctors } from '../../data/apiData'
 import { api } from '../../lib/api'
 import { formatToman, toFa } from '../../lib/utils'
 import type { WithdrawalRequest } from '../../types'
+import { toast } from '../../store/toastStore'
 
 const statusMeta: Record<WithdrawalRequest['status'], { tone: 'green' | 'amber' | 'red'; label: string }> = {
   approved: { tone: 'green', label: 'تأییدشده' },
@@ -52,8 +53,9 @@ export default function WithdrawalRequests() {
             : w,
         ),
       )
-    } catch {
-      alert('خطا در ثبت تصمیم')
+      toast.success(status === 'approved' ? 'درخواست برداشت تأیید شد' : 'درخواست برداشت رد شد')
+    } catch (error) {
+      toast.error('خطا در ثبت تصمیم', error instanceof Error ? error.message : undefined)
     }
     setReviewId(null)
     setNote('')
@@ -69,8 +71,9 @@ export default function WithdrawalRequests() {
             : w,
         ),
       )
-    } catch {
-      alert('خطا در ثبت تصمیم')
+      toast.success(status === 'approved' ? 'درخواست برداشت تأیید شد' : 'درخواست برداشت رد شد')
+    } catch (error) {
+      toast.error('خطا در ثبت تصمیم', error instanceof Error ? error.message : undefined)
     }
   }
 

@@ -4,6 +4,7 @@ import GlassCard from '../ui/GlassCard'
 import { useAuthStore } from '../../store/authStore'
 import { cn, toFa } from '../../lib/utils'
 import type { UploadingFile } from '../../types'
+import { toast } from '../../store/toastStore'
 
 interface Props {
   open: boolean
@@ -58,7 +59,7 @@ export default function DocumentUploadModal({ open, onClose }: Props) {
 
   const handleFile = (field: DocField, file: File) => {
     if (file.size > field.maxSize * 1024 * 1024) {
-      alert(`حجم فایل باید کمتر از ${toFa(field.maxSize)} مگابایت باشد`)
+      toast.warning('حجم فایل بیش از حد مجاز است', `حداکثر حجم این فایل ${toFa(field.maxSize)} مگابایت است.`)
       return
     }
     const item: UploadingFile = {

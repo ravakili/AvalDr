@@ -14,6 +14,7 @@ import {
 import { cn, toFa } from '../../lib/utils'
 import { api } from '../../lib/api'
 import type { Patient } from '../../types'
+import { toast } from '../../store/toastStore'
 
 interface User extends Patient {
   suspended?: boolean
@@ -60,8 +61,9 @@ export default function ManageUsers() {
     try {
       await api.post(endpoint)
       setList((arr) => arr.map((p) => (p.id === id ? { ...p, suspended: !p.suspended } : p)))
+      toast.success(user.suspended ? 'حساب کاربر فعال شد' : 'حساب کاربر تعلیق شد')
     } catch (err) {
-      console.error(err)
+      toast.error('تغییر وضعیت کاربر انجام نشد', err instanceof Error ? err.message : undefined)
     }
   }
 
@@ -72,8 +74,9 @@ export default function ManageUsers() {
     try {
       await Promise.all(ids.map((id) => api.post(`/admin/users/${id}/suspend/`)))
       setList((arr) => arr.map((p) => (ids.includes(p.id) ? { ...p, suspended: true } : p)))
+      toast.success(`${ids.length.toLocaleString('fa-IR')} حساب کاربری تعلیق شد`)
     } catch (err) {
-      console.error(err)
+      toast.error('تعلیق گروهی انجام نشد', err instanceof Error ? err.message : undefined)
     }
   }
 
@@ -90,6 +93,7 @@ export default function ManageUsers() {
     a.download = 'users.csv'
     a.click()
     URL.revokeObjectURL(url)
+    toast.success('خروجی کاربران آماده شد')
   }
 
   if (loading) {

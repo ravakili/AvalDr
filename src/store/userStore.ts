@@ -86,7 +86,10 @@ export const useUserStore = create<UserState>()(
             profile: s.profile ? { ...s.profile, avatar: user.avatar } : null,
             loading: false,
           }))
-        } catch { set({ loading: false }) }
+        } catch (error) {
+          set({ loading: false })
+          throw error
+        }
       },
 
       fetchAppointments: async () => {
@@ -138,7 +141,9 @@ export const useUserStore = create<UserState>()(
               String(p.id) === id ? { ...p, enabled } : p
             ),
           }))
-        } catch { /* ignore */ }
+        } catch (error) {
+          throw error
+        }
       },
 
       fetchMedicalRecord: async () => {
@@ -155,6 +160,7 @@ export const useUserStore = create<UserState>()(
           set({ medicalRecord: updated as unknown as MedicalRecord, loading: false })
         } catch {
           set({ loading: false, error: 'خطا در ذخیره پرونده' })
+          throw new Error('خطا در ذخیره پرونده')
         }
       },
 

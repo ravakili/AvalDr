@@ -11,6 +11,7 @@ import persian from 'react-date-object/calendars/persian'
 import persian_fa from 'react-date-object/locales/persian_fa'
 import type { Value } from 'react-multi-date-picker'
 import { MdOutlineKeyboardArrowRight } from "react-icons/md";
+import { toast } from "../../store/toastStore";
 
 const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
 
@@ -122,7 +123,7 @@ export default function ProfileCompletion() {
   const handleDocFile = (key: string, file: File) => {
     const field = docFields.find((f) => f.key === key);
     if (field && file.size > field.maxSize * 1024 * 1024) {
-      alert(`حجم فایل باید کمتر از ${toFa(field.maxSize)} مگابایت باشد`);
+      toast.warning("حجم فایل بیش از حد مجاز است", `حداکثر حجم این فایل ${toFa(field.maxSize)} مگابایت است.`);
       return;
     }
     const item: UploadingFile = {

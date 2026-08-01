@@ -20,6 +20,7 @@ import FindDoctors from "./pages/user/FindDoctors";
 import BookAppointment from "./pages/user/BookAppointment";
 import MyAppointments from "./pages/user/MyAppointments";
 import UserProfile from "./pages/user/UserProfile";
+import PaymentCallback from "./pages/user/PaymentCallback";
 
 // Chat pages
 import ChatPage from "./pages/chat/ChatPage";
@@ -81,6 +82,14 @@ export default function App() {
       <Route path="/login" element={<Login />} />
       <Route path="/verify-otp" element={<OTPVerification />} />
       <Route path="/complete-profile" element={<ProfileCompletion />} />
+      <Route
+        path="/payment/callback"
+        element={
+          <ProtectedRoute allow={["user"]}>
+            <PaymentCallback />
+          </ProtectedRoute>
+        }
+      />
 
       {/* Patient */}
       <Route

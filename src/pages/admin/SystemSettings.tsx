@@ -9,6 +9,7 @@ import { IconCheck, IconSettings, IconUser } from '../../components/ui/icons'
 import { api, apiRequest } from '../../lib/api'
 import { useAuthStore } from '../../store/authStore'
 import type { PlatformSetting } from '../../types'
+import { toast } from '../../store/toastStore'
 
 type Section = 'general' | 'fees' | 'notifications' | 'templates' | 'profile'
 
@@ -65,9 +66,9 @@ export default function SystemSettings() {
     try {
       const visible = settings.filter(inSection)
       await Promise.all(visible.map((s) => api.patch(`/admin/settings/${s.key}/`, { value: s.value })))
-      alert('تنظیمات با موفقیت ذخیره شد.')
-    } catch {
-      alert('خطا در ذخیره تنظیمات')
+      toast.success('تنظیمات با موفقیت ذخیره شد')
+    } catch (error) {
+      toast.error('خطا در ذخیره تنظیمات', error instanceof Error ? error.message : undefined)
     } finally {
       setSaving(false)
     }
@@ -77,9 +78,9 @@ export default function SystemSettings() {
     setSaving(true)
     try {
       await Promise.all(smsTemplates.map((t) => api.patch(`/admin/sms-templates/${t.key}/`, { body: t.body })))
-      alert('قالب‌های پیامک با موفقیت ذخیره شد.')
-    } catch {
-      alert('خطا در ذخیره قالب‌ها')
+      toast.success('قالب‌های پیامک ذخیره شد')
+    } catch (error) {
+      toast.error('خطا در ذخیره قالب‌ها', error instanceof Error ? error.message : undefined)
     } finally {
       setSaving(false)
     }
@@ -97,9 +98,9 @@ export default function SystemSettings() {
         await api.patch('/admin/me/', { name: profileName })
       }
       useAuthStore.getState().login(user?.role || 'admin', profileName)
-      alert('پروفایل با موفقیت به‌روزرسانی شد.')
-    } catch {
-      alert('خطا در به‌روزرسانی پروفایل')
+      toast.success('پروفایل با موفقیت به‌روزرسانی شد')
+    } catch (error) {
+      toast.error('خطا در به‌روزرسانی پروفایل', error instanceof Error ? error.message : undefined)
     } finally {
       setProfileSaving(false)
     }

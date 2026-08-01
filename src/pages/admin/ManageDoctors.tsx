@@ -21,6 +21,7 @@ import { doctorName, getSpecialty } from '../../data/apiData'
 import { api } from '../../lib/api'
 import { cn, toFa } from '../../lib/utils'
 import type { Doctor, Patient, Specialty } from '../../types'
+import { toast } from '../../store/toastStore'
 
 type DocStatus = Doctor['status']
 
@@ -101,8 +102,11 @@ export default function ManageDoctors() {
     try {
       await api.post(`/admin/doctors/${id}/status/`, { status: s })
       setList((arr) => arr.map((d) => (d.id === id ? { ...d, status: s } : d)))
+      toast.success(
+        s === 'approved' ? 'پزشک تأیید شد' : s === 'suspended' ? 'حساب پزشک تعلیق شد' : 'وضعیت پزشک تغییر کرد',
+      )
     } catch (err) {
-      console.error('Failed to update doctor status', err)
+      toast.error('تغییر وضعیت پزشک انجام نشد', err instanceof Error ? err.message : undefined)
     }
   }
 

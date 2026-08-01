@@ -132,13 +132,14 @@ export async function refreshBackendData(role: Role = currentRole || 'user') {
 }
 
 export function useBackendData(role: Role) {
-  const [, setVersion] = useState(0)
+  const [version, setVersion] = useState(0)
   useEffect(() => {
     const subscriber = () => setVersion((version) => version + 1)
     subscribers.add(subscriber)
     refreshBackendData(role).catch(console.error)
     return () => { subscribers.delete(subscriber) }
   }, [role])
+  return version
 }
 
 export const getDoctor = (id: string) => doctors.find((doctor) => doctor.id === id)

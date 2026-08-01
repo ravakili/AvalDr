@@ -24,7 +24,7 @@ export default function ChatInbox() {
         if (role === 'admin') return true
         return a.patientId === (user?.refId || ME)
       })
-      .filter((a) => a.status !== 'cancelled')
+      .filter((a) => a.status !== 'cancelled' && a.status !== 'pending-payment')
       .sort((a, b) => b.date.localeCompare(a.date) || b.time.localeCompare(a.time)),
     [role, ME, ME_REF],
   )

@@ -13,6 +13,7 @@ import { doctorName } from '../../data/apiData'
 import { api } from '../../lib/api'
 import { formatDateFa, toFa } from '../../lib/utils'
 import type { AuditLog } from '../../types'
+import { toast } from '../../store/toastStore'
 
 const actionLabels: Record<string, { label: string; tone: 'gray' | 'green' | 'amber' | 'red' | 'blue' | 'teal' }> = {
   'appointment.created': { label: 'ثبت نوبت', tone: 'blue' },
@@ -90,6 +91,7 @@ export default function AppointmentLogs() {
     a.download = 'audit-logs.csv'
     a.click()
     URL.revokeObjectURL(url)
+    toast.success('خروجی گزارش آماده شد')
   }
 
   if (loading) return <div className="p-10 text-center text-ink-400">در حال بارگذاری...</div>

@@ -35,6 +35,7 @@ import type {
   CommunicationSettings,
   WorkingHourSlot,
 } from "../../types";
+import { toast } from "../../store/toastStore";
 
 type CommState = Record<ConsultType, { enabled: boolean; fee: number }>;
 
@@ -112,16 +113,13 @@ export default function DoctorProfile() {
       });
       setAvatarSrc(res.avatar);
       refreshBackendData("doctor");
+      toast.success("عکس پروفایل به‌روزرسانی شد");
     } catch {
-      alert("خطا در آپلود عکس");
+      toast.error("خطا در آپلود عکس");
     } finally {
       setAvatarUploading(false);
     }
   };
-
-  useEffect(() => {
-    refreshBackendData("doctor");
-  }, []);
 
   useEffect(() => {
     setAvatarSrc(me?.avatar);
@@ -135,7 +133,7 @@ export default function DoctorProfile() {
         const types = ['prefix', 'city'];
         const results = await Promise.all(
           types.map(async (t) => {
-            const data = await api.get<{ id: string; name: string }[]>(`/admin/definitions/?type=${t}`);
+            const data = await api.get<{ id: string; name: string }[]>(`/common/definitions/?type=${t}`);
             return [t, data] as [string, { id: string; name: string }[]];
           })
         );
@@ -311,8 +309,9 @@ export default function DoctorProfile() {
         api.put("/doctors/me/working-hours/", hours),
       ]);
       await refreshBackendData("doctor");
+      toast.success("اطلاعات پزشک ذخیره شد");
     } catch (e) {
-      alert("خطا در ذخیره اطلاعات");
+      toast.error("خطا در ذخیره اطلاعات", e instanceof Error ? e.message : undefined);
     } finally {
       setSaving(false);
     }

@@ -13,6 +13,7 @@ export interface Specialty {
 
 export interface Person {
   id: string
+  userId?: string
   name: string
   avatar: string // URL
   phone: string
@@ -95,11 +96,14 @@ export interface Appointment {
   patient?: Patient
   doctor?: Doctor
   paymentStatus?: string | null
+  refundStatus?: string | null
 }
 
 export interface ChatMessage {
   id: string
   senderId: string
+  senderName?: string
+  senderRole?: Role
   text: string
   time: string
   type: 'text' | 'prescription' | 'system' | 'file'

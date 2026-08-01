@@ -28,6 +28,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { formatDateFa, toFa } from '../../lib/utils'
 import { api } from '../../lib/api'
+import { doctorName } from '../../data/apiData'
 
 const tooltipStyle = {
   borderRadius: 12,
@@ -51,6 +52,13 @@ interface DashboardData {
   completedAppointments: number
   pendingWithdrawals: number
   revenue: number
+}
+
+function extractResults<T>(response: T | { results: T }): T {
+  if (response && typeof response === 'object' && 'results' in response) {
+    return (response as { results: T }).results
+  }
+  return response as T
 }
 
 const actionLabels: Record<string, string> = {
@@ -77,9 +85,11 @@ export default function AdminOverview() {
       api.get<any[]>('/appointments/'),
       api.get<any[]>('/admin/audit-logs/'),
     ]).then(([dash, appts, audit]) => {
+      const appointmentItems = extractResults(appts)
+      const auditItems = extractResults(audit)
       setDashboard(dash)
-      setRecentAppts(appts.sort((a: any, b: any) => (a.date < b.date ? 1 : -1)).slice(0, 6))
-      setLogs(audit.slice(0, 6))
+      setRecentAppts([...appointmentItems].sort((a: any, b: any) => (a.date < b.date ? 1 : -1)).slice(0, 6))
+      setLogs(auditItems.slice(0, 6))
     }).catch(() => {})
   }, [])
 
@@ -144,8 +154,8 @@ export default function AdminOverview() {
               <tbody className="divide-y divide-white/40">
                 {recentAppts.map((a: any) => (
                   <tr key={a.id} className="text-ink-700">
-                    <td className="py-3"><span className="font-medium">{a.patientName || 'کاربر'}</span></td>
-                    <td className="py-3 text-ink-500">{a.doctorName || 'پزشک'}</td>
+                    <td className="py-3"><span className="font-medium">{a.patient?.name || a.patientName || 'کاربر'}</span></td>
+                    <td className="py-3 text-ink-500">{doctorName(a.doctor) || a.doctorName || 'پزشک'}</td>
                     <td className="py-3 text-ink-500">{formatDateFa(a.date)}</td>
                     <td className="py-3">
                       <Badge tone={a.status === 'completed' ? 'green' : a.status === 'cancelled' ? 'red' : a.status === 'in-progress' ? 'teal' : 'amber'} dot>
