@@ -126,6 +126,14 @@ class DoctorSerializer(serializers.ModelSerializer):
         read_only_fields = ('id', 'userId', 'rating', 'reviewsCount', 'status', 'verified')
 
 
+class PublicDoctorSerializer(DoctorSerializer):
+    class Meta(DoctorSerializer.Meta):
+        fields = tuple(
+            field for field in DoctorSerializer.Meta.fields
+            if field not in ('phone', 'cardNumber', 'accountNumber', 'shaba')
+        )
+
+
 class DoctorProfileUpdateSerializer(serializers.ModelSerializer):
     name = serializers.CharField(source='user.display_name', required=False)
     avatar = serializers.URLField(source='user.avatar', required=False, allow_blank=True)

@@ -6,7 +6,7 @@ from drf_spectacular.utils import extend_schema_field
 from accounts.serializers import PatientProfileSerializer
 from doctors.models import DoctorProfile
 from doctors.models import CommunicationSetting
-from doctors.serializers import DoctorSerializer
+from doctors.serializers import PublicDoctorSerializer
 
 from .models import Appointment, VisitLog
 from .services import expire_stale_pending_payments
@@ -23,7 +23,7 @@ class AppointmentSerializer(serializers.ModelSerializer):
     startedAt = serializers.DateTimeField(source='started_at', read_only=True)
     isFollowUp = serializers.BooleanField(source='is_follow_up', required=False, default=False)
     patient = serializers.SerializerMethodField()
-    doctor = DoctorSerializer(read_only=True)
+    doctor = PublicDoctorSerializer(read_only=True)
     paymentStatus = serializers.SerializerMethodField()
 
     class Meta:

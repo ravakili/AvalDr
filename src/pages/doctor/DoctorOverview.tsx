@@ -1,4 +1,5 @@
 import { Link } from 'react-router-dom'
+import { useEffect } from 'react'
 import GlassCard from '../../components/ui/GlassCard'
 import Avatar from '../../components/ui/Avatar'
 import PrimaryButton from '../../components/ui/PrimaryButton'
@@ -24,7 +25,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { appointments, doctorEarnings, getPatient } from '../../data/apiData'
+import { appointments, doctorEarnings, getPatient, refreshBackendData } from '../../data/apiData'
 import { formatDateFa, formatToman, toFa } from '../../lib/utils'
 import { useAuthStore } from '../../store/authStore'
 const primaryChartColor = 'rgb(var(--color-primary-500))'
@@ -33,6 +34,11 @@ const chartAxisColor = '#94a3b8'
 
 export default function DoctorOverview() {
   const ME = useAuthStore((state) => state.user?.refId || '')
+
+  useEffect(() => {
+    refreshBackendData('doctor').catch(() => {})
+  }, [])
+
   const mine = appointments.filter((a) => a.doctorId === ME)
   const today = mine.filter((a) => a.status === 'in-progress' || a.status === 'waiting')
   const pending = today.filter((a) => a.status === 'waiting')

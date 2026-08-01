@@ -8,6 +8,7 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     senderId = serializers.CharField(source='sender_id', read_only=True)
     senderName = serializers.CharField(source='sender.display_name', read_only=True)
     senderRole = serializers.CharField(source='sender.role', read_only=True)
+    senderAvatar = serializers.SerializerMethodField()
     time = serializers.DateTimeField(source='created_at', read_only=True)
     type = serializers.CharField(source='message_type')
     fileUrl = serializers.SerializerMethodField()
@@ -16,11 +17,18 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     class Meta:
         model = ChatMessage
         fields = (
-            'id', 'senderId', 'senderName', 'senderRole', 'text', 'time',
+            'id', 'senderId', 'senderName', 'senderRole', 'senderAvatar', 'text', 'time',
             'type', 'fileUrl', 'fileName', 'file',
         )
         extra_kwargs = {'file': {'write_only': True, 'required': False}}
         read_only_fields = ('id', 'senderId', 'time')
+
+    def get_senderAvatar(self, obj):
+        if not obj.sender.avatar:
+            return ''
+        request = self.context.get('request')
+        url = obj.sender.avatar
+        return request.build_absolute_uri(url) if request else url
 
     def get_fileUrl(self, obj):
         if not obj.file:

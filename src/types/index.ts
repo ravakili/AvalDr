@@ -104,6 +104,7 @@ export interface ChatMessage {
   senderId: string
   senderName?: string
   senderRole?: Role
+  senderAvatar?: string
   text: string
   time: string
   type: 'text' | 'prescription' | 'system' | 'file'

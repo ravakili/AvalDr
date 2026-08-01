@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import GlassCard from '../../components/ui/GlassCard'
 import Avatar from '../../components/ui/Avatar'
@@ -18,7 +18,7 @@ import {
   IconFile,
   IconList,
 } from '../../components/ui/icons'
-import { appointments, getPatient, prescriptions } from '../../data/apiData'
+import { appointments, getPatient, prescriptions, refreshBackendData } from '../../data/apiData'
 import type { AppointmentStatus } from '../../types'
 import { useAuthStore } from '../../store/authStore'
 
@@ -38,6 +38,10 @@ export default function DoctorAppointments() {
   const [expanded, setExpanded] = useState<string | null>(null)
   const [profilePatient, setProfilePatient] = useState<string | null>(null)
   const [rxPatient, setRxPatient] = useState<string | null>(null)
+
+  useEffect(() => {
+    refreshBackendData('doctor').catch(() => {})
+  }, [])
 
   const mine = appointments
     .filter((a) => a.doctorId === ME)

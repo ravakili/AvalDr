@@ -32,6 +32,8 @@ export const revenueData = fallback.revenueData
 let currentRole: Role | null = null
 let loadingPromise: Promise<void> | null = null
 const subscribers = new Set<() => void>()
+let lastRefreshedAt = 0
+const REFRESH_MIN_INTERVAL = 3000
 
 function emit() {
   subscribers.forEach((subscriber) => subscriber())
@@ -56,6 +58,9 @@ function extractResults<T>(response: T | { results: T }): T {
 export async function refreshBackendData(role: Role = currentRole || 'user') {
   currentRole = role
   if (loadingPromise) return loadingPromise
+  const now = Date.now()
+  if (now - lastRefreshedAt < REFRESH_MIN_INTERVAL) return Promise.resolve()
+  lastRefreshedAt = now
   loadingPromise = (async () => {
     const [publicDoctors, publicSpecialties] = await Promise.all([
       api.get<Doctor[]>('/doctors/', false),
@@ -147,3 +152,10 @@ export const getPatient = (id: string) => patients.find((patient) => patient.id 
 export const getSpecialty = (id: string) => specialties.find((specialty) => specialty.id === id)
 export const doctorName = (d: { name: string; prefix?: string } | null | undefined) =>
   d ? `${d.prefix ? d.prefix + ' ' : ''}${d.name}` : ''
+
+export async function syncAppointment(id: string) {
+  const fresh = await api.get<Appointment>(`/appointments/${id}/`)
+  const index = appointments.findIndex((a) => a.id === id)
+  if (index >= 0) appointments[index] = fresh
+  else appointments.push(fresh)
+}

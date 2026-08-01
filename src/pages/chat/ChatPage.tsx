@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import GlassCard from "../../components/ui/GlassCard";
 import PrimaryButton from "../../components/ui/PrimaryButton";
@@ -26,6 +26,7 @@ import {
   IconUsers,
   IconChevron,
   IconPlus,
+  IconChevronRight,
 } from "../../components/ui/icons";
 import {
   appointments,
@@ -34,6 +35,7 @@ import {
   getDoctor,
   doctorName,
   refreshBackendData,
+  syncAppointment,
   doctors,
 } from "../../data/apiData";
 import { api } from "../../lib/api";
@@ -86,10 +88,7 @@ export default function ChatPage() {
       )[0]?.id ||
       "",
   );
-  const activeAppt = useMemo(
-    () => appointments.find((a) => a.id === activeId),
-    [activeId],
-  );
+  const activeAppt = appointments.find((a) => a.id === activeId);
   const isAdminChat = activeId === ADMIN_CONVERSATION_ID;
 
   /* ── messages ── */
@@ -121,6 +120,7 @@ export default function ChatPage() {
   /* ── chat state ── */
   const [chatClosed, setChatClosed] = useState(false);
   const [lastMessages, setLastMessages] = useState<Record<string, string>>({});
+  const [statusTick, setStatusTick] = useState(0);
 
   /* ── derived counterpart ── */
   const patient = activeAppt ? getPatient(activeAppt.patientId) : undefined;
@@ -135,12 +135,11 @@ export default function ChatPage() {
     : counterpart?.name || "";
 
   /* ── list appointments for sidebar ── */
-  const myAppointments = useMemo(() => {
-    if (isAdmin) return appointments;
-    return appointments.filter(
-      (a) => a.doctorId === ME_REF || a.patientId === (ME_REF || ME),
-    );
-  }, [ME, ME_REF, isAdmin]);
+  const myAppointments = isAdmin
+    ? appointments
+    : appointments.filter(
+        (a) => a.doctorId === ME_REF || a.patientId === (ME_REF || ME),
+      );
 
   const activeAppointments = myAppointments.filter(
     (a) => a.status === "in-progress" || a.status === "waiting",
@@ -149,7 +148,7 @@ export default function ChatPage() {
     (a) => a.status === "completed" || a.status === "cancelled",
   );
 
-  /* ── fetch messages ── */
+  /* ── fetch messages + appointment status ── */
   useEffect(() => {
     if (!activeId || isAdminChat) {
       setMessages(isAdminChat ? adminMessages : []);
@@ -170,11 +169,20 @@ export default function ChatPage() {
           }
         })
         .catch(() => {});
+    const syncStatus = () =>
+      syncAppointment(activeId)
+        .then(() => {
+          if (active) setStatusTick((t) => t + 1);
+        })
+        .catch(() => {});
     fetchMessages();
-    const interval = setInterval(fetchMessages, 4000);
+    syncStatus();
+    const msgInterval = setInterval(fetchMessages, 4000);
+    const statusInterval = setInterval(syncStatus, 2000);
     return () => {
       active = false;
-      clearInterval(interval);
+      clearInterval(msgInterval);
+      clearInterval(statusInterval);
     };
   }, [activeId, isAdminChat]);
 
@@ -230,6 +238,13 @@ export default function ChatPage() {
     const id = setInterval(() => setCallTimer((t) => t + 1), 1000);
     return () => clearInterval(id);
   }, [videoActive]);
+
+  /* ── stop video when session ends (e.g. doctor ended it) ── */
+  useEffect(() => {
+    if (videoActive && activeAppt && activeAppt.status !== "in-progress") {
+      setVideoActive(false);
+    }
+  }, [videoActive, activeAppt?.status]);
 
   const callTimeStr = `${toFa(String(Math.floor(callTimer / 60)).padStart(2, "0"))}:${toFa(String(callTimer % 60).padStart(2, "0"))}`;
 
@@ -332,7 +347,7 @@ export default function ChatPage() {
     !chatClosed &&
     activeAppt?.status !== "completed" &&
     activeAppt?.status !== "cancelled" &&
-    (isDoctor || isAdmin || activeAppt?.status !== "waiting");
+    (isAdmin || activeAppt?.status === "in-progress");
 
   return (
     <div className="flex h-[calc(100vh-9rem)] gap-4">
@@ -381,7 +396,7 @@ export default function ChatPage() {
               className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-white/60 lg:hidden"
               aria-label="بازگشت"
             >
-              <IconChevron />
+              <IconChevronRight />
             </button>
 
             {isAdminChat ? (
@@ -609,29 +624,24 @@ export default function ChatPage() {
                   )}
                 >
                   <div className="relative">
-                    {isAdmin && !isAdminChat ? (
-                      <Avatar
-                        src={
-                          senderIsAdmin
+                    <Avatar
+                      src={
+                        senderIsAdmin
+                          ? m.senderAvatar || user?.avatar || ""
+                          : mine
                             ? user?.avatar || ""
                             : senderIsPatient
                               ? patient?.avatar || ""
-                              : doctor?.avatar || ""
-                        }
-                        size="sm"
-                      />
-                    ) : (
-                      <Avatar
-                        src={
-                          mine ? user?.avatar || "" : counterpart?.avatar || ""
-                        }
-                        size="sm"
-                      />
-                    )}
-                    {isAdmin && !isAdminChat && (
+                              : senderIsDoctor
+                                ? doctor?.avatar || ""
+                                : counterpart?.avatar || ""
+                      }
+                      size="sm"
+                    />
+                    {(senderIsAdmin || (isAdmin && !isAdminChat)) && (
                       <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded bg-ink-800 px-1 py-[1px] text-[8px] text-white whitespace-nowrap">
                         {senderIsAdmin
-                          ? m.senderName || user?.name || "ادمین"
+                          ? m.senderName || "ادمین"
                           : senderIsPatient
                             ? "بیمار"
                             : senderIsDoctor

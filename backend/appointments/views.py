@@ -147,13 +147,13 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=('post',))
     def start(self, request, pk=None):
         return self._transition(
-            request, self.get_object(), 'in-progress', ('waiting',), ('doctor',)
+            request, self.get_object(), 'in-progress', ('waiting',), ('doctor', 'admin')
         )
 
     @action(detail=True, methods=('post',))
     def complete(self, request, pk=None):
         return self._transition(
-            request, self.get_object(), 'completed', ('in-progress',), ('doctor',)
+            request, self.get_object(), 'completed', ('in-progress',), ('doctor', 'admin')
         )
 
     @action(detail=True, methods=('post',))

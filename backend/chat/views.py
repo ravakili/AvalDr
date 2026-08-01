@@ -34,8 +34,8 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
         appointment = appointment_for_user(request.user, appointment_id)
         if not appointment:
             return Response({'detail': 'دسترسی به این گفتگو مجاز نیست.'}, status=403)
-        if appointment.status not in ('waiting', 'in-progress', 'completed'):
-            return Response({'detail': 'گفتگو برای این نوبت فعال نیست.'}, status=409)
+        if appointment.status != 'in-progress':
+            return Response({'detail': 'گفتگو فقط پس از شروع جلسه فعال است.'}, status=409)
         serializer = ChatMessageSerializer(data=request.data, context={'request': request})
         serializer.is_valid(raise_exception=True)
         message = serializer.save(

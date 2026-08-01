@@ -20,12 +20,13 @@ from .serializers import (
     DoctorDocumentSerializer,
     DoctorProfileUpdateSerializer,
     DoctorSerializer,
+    PublicDoctorSerializer,
     WorkingHourSerializer,
 )
 
 
 class DoctorViewSet(viewsets.ReadOnlyModelViewSet):
-    serializer_class = DoctorSerializer
+    serializer_class = PublicDoctorSerializer
     permission_classes = (AllowAny,)
     pagination_class = None
 

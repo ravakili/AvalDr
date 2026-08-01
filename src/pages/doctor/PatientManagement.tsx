@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import DatePicker from 'react-multi-date-picker'
 import persian from 'react-date-object/calendars/persian'
@@ -40,6 +40,10 @@ export default function PatientManagement() {
   const [fuDateStr, setFuDateStr] = useState('')
   const [fuTime, setFuTime] = useState('')
   const [fuNote, setFuNote] = useState('')
+
+  useEffect(() => {
+    refreshBackendData('doctor').catch(() => {})
+  }, [])
 
   // Get unique patient IDs from my appointments
   const myPatientIds = [...new Set(appointments.filter((a) => a.doctorId === ME).map((a) => a.patientId))]
