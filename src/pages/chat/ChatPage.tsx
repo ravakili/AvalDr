@@ -72,15 +72,10 @@ export default function ChatPage() {
   const ME_REF = user?.refId || "";
 
   /* ── active conversation ── */
-  const [activeId, setActiveId] = useState<string>(
-    appointmentId ||
-      appointments.filter(
-        (a) =>
-          a.status !== "cancelled" &&
-          (a.doctorId === ME_REF || a.patientId === (ME_REF || ME)),
-      )[0]?.id ||
-      "",
-  );
+  const [activeId, setActiveId] = useState<string>(appointmentId || "");
+  useEffect(() => {
+    if (appointmentId) setActiveId(appointmentId);
+  }, [appointmentId]);
   const activeAppt = appointments.find((a) => a.id === activeId);
   const supportId = activeId.startsWith(SUPPORT_PREFIX)
     ? activeId.slice(SUPPORT_PREFIX.length)
@@ -459,7 +454,7 @@ export default function ChatPage() {
             {/* Mobile back */}
             <button
               onClick={() => setActiveId("")}
-              className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-white/60 lg:hidden"
+              className="grid h-9 w-9 place-items-center rounded-lg text-ink-500 hover:bg-white/60 "
               aria-label="بازگشت"
             >
               <IconChevronRight />
@@ -954,6 +949,18 @@ export default function ChatPage() {
               </p>
             </div>
           )}
+        </GlassCard>
+      )}
+
+      {/* ===== No user selected placeholder (desktop) ===== */}
+      {!activeId && (
+        <GlassCard className="hidden min-w-0 flex-1 flex-col items-center justify-center overflow-hidden p-8 max-lg:rounded-2xl lg:flex">
+          <div className="glass-soft grid h-20 w-20 place-items-center rounded-full">
+            <IconChat className="h-9 w-9 text-primary-400" />
+          </div>
+          <p className="mt-4 text-center text-sm font-medium text-ink-400">
+            لطفا یک کاربر را انتخاب کنید.
+          </p>
         </GlassCard>
       )}
 

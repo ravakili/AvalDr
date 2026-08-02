@@ -208,12 +208,7 @@ export default function MyAppointments() {
             </button>
           ))}
         </div>
-        <InputField
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          placeholder="جستجوی پزشک…"
-          icon={<IconSearch />}
-        />
+    
         <input
           value={search}
           onChange={(e) => setSearch(e.target.value)}
@@ -319,7 +314,7 @@ export default function MyAppointments() {
                         </PrimaryButton>
                       </>
                     )}
-                    {a.status === "completed" && (
+                    {a.status === "completed" &&
                       prescriptions.some((p) => p.appointmentId === a.id) && (
                         <PrimaryButton
                           size="sm"
@@ -327,15 +322,15 @@ export default function MyAppointments() {
                           icon={<IconPrescription className="h-4 w-4" />}
                           onClick={() =>
                             setSelectedRx(
-                              prescriptions.find((p) => p.appointmentId === a.id) ||
-                                null,
+                              prescriptions.find(
+                                (p) => p.appointmentId === a.id,
+                              ) || null,
                             )
                           }
                         >
                           مشاهده نسخه
                         </PrimaryButton>
-                      )
-                    )}
+                      )}
                   </div>
                 </div>
               </GlassCard>
@@ -468,7 +463,11 @@ export default function MyAppointments() {
           <div className="space-y-4">
             <div className="flex items-center justify-between rounded-2xl border border-white/50 bg-white/40 p-4">
               <div className="flex items-center gap-3">
-                <Avatar src={getDoctor(selectedRx.doctorId)?.avatar} size="md" ring />
+                <Avatar
+                  src={getDoctor(selectedRx.doctorId)?.avatar}
+                  size="md"
+                  ring
+                />
                 <div>
                   <p className="text-sm font-bold text-ink-800">
                     {doctorName(getDoctor(selectedRx.doctorId)) || "پزشک"}

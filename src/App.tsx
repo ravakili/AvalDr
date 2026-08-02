@@ -81,7 +81,8 @@ export default function App() {
   useEffect(() => {
     const handleAuthExpired = () => logout();
     window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
-    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    return () =>
+      window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
   }, [logout]);
 
   return (
@@ -114,7 +115,7 @@ export default function App() {
         <Route path="doctors" element={<FindDoctors />} />
         <Route path="book/:doctorId" element={<BookAppointment />} />
         <Route path="appointments" element={<MyAppointments />} />
-        <Route path="consult" element={<ChatInbox />} />
+        <Route path="consult" element={<ChatPage />} />
         <Route path="consult/:appointmentId" element={<ChatPage />} />
         <Route path="profile" element={<UserProfile />} />
       </Route>
@@ -130,7 +131,7 @@ export default function App() {
       >
         <Route index element={<DoctorOverview />} />
         <Route path="appointments" element={<DoctorAppointments />} />
-        <Route path="consult" element={<ChatInbox />} />
+        <Route path="consult" element={<ChatPage />} />
         <Route path="consult/:appointmentId" element={<ChatPage />} />
         <Route path="patients" element={<PatientManagement />} />
         <Route path="profile" element={<DoctorProfile />} />
@@ -152,7 +153,7 @@ export default function App() {
         <Route path="logs" element={<AppointmentLogs />} />
         <Route path="withdrawals" element={<WithdrawalRequests />} />
         <Route path="settings" element={<SystemSettings />} />
-        <Route path="consult" element={<ChatInbox />} />
+        <Route path="consult" element={<ChatPage />} />
         <Route path="consult/:appointmentId" element={<ChatPage />} />
       </Route>
 
