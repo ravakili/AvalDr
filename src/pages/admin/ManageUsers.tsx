@@ -3,11 +3,14 @@ import GlassCard from '../../components/ui/GlassCard'
 import Avatar from '../../components/ui/Avatar'
 import Badge from '../../components/ui/Badge'
 import PrimaryButton from '../../components/ui/PrimaryButton'
-import InputField from '../../components/ui/InputField'
+import InputField, { SelectField } from '../../components/ui/InputField'
+import Toggle from '../../components/ui/Toggle'
 import EmptyState from '../../components/ui/EmptyState'
 import Modal from '../../components/ui/Modal'
+import JalaliDateSelect from '../../components/ui/JalaliDateSelect'
 import {
   IconDownload,
+  IconPlus,
   IconSearch,
   IconUsers,
 } from '../../components/ui/icons'
@@ -19,6 +22,13 @@ import { toast } from '../../store/toastStore'
 interface User extends Patient {
   suspended?: boolean
 }
+
+interface DefinitionItem {
+  id: string
+  name: string
+}
+
+const DEF_TYPES = ['city', 'insurance_type', 'supplementary_insurance', 'allergy', 'diagnosis']
 
 function extractResults<T>(response: T | { results: T }): T {
   if (response && typeof response === 'object' && 'results' in response) {
@@ -34,12 +44,42 @@ export default function ManageUsers() {
   const [selected, setSelected] = useState<string[]>([])
   const [bulkOpen, setBulkOpen] = useState(false)
   const [profileUser, setProfileUser] = useState<User | null>(null)
+  const [editingUser, setEditingUser] = useState<User | null>(null)
+  const [defs, setDefs] = useState<Record<string, DefinitionItem[]>>({})
+  const [editForm, setEditForm] = useState({
+    name: '',
+    city: '',
+    nationalId: '',
+    insuranceType: '',
+    supplementaryInsurance: '',
+    gender: '' as 'male' | 'female' | '',
+    bloodType: '',
+    dateOfBirth: '',
+    allergies: [] as string[],
+    chronicConditions: [] as string[],
+    emergencyName: '',
+    emergencyPhone: '',
+    emergencyRelation: '',
+    receiveNotifications: true,
+    receivePromotions: false,
+  })
 
   useEffect(() => {
     api.get<User[]>('/admin/users/')
       .then((data) => setList(extractResults(data)))
       .catch(console.error)
       .finally(() => setLoading(false))
+
+    Promise.all(
+      DEF_TYPES.map(async (type) => {
+        try {
+          const data = await api.get<DefinitionItem[]>(`/common/definitions/?type=${type}`)
+          return [type, data] as const
+        } catch {
+          return [type, []] as const
+        }
+      }),
+    ).then((results) => setDefs(Object.fromEntries(results)))
   }, [])
 
   const filtered = useMemo(
@@ -54,10 +94,10 @@ export default function ManageUsers() {
 
   const toggleSuspend = async (id: string) => {
     const user = list.find((u) => u.id === id)
-    if (!user) return
+    if (!user || !user.userId) return
     const endpoint = user.suspended
-      ? `/admin/users/${id}/activate/`
-      : `/admin/users/${id}/suspend/`
+      ? `/admin/users/${user.userId}/activate/`
+      : `/admin/users/${user.userId}/suspend/`
     try {
       await api.post(endpoint)
       setList((arr) => arr.map((p) => (p.id === id ? { ...p, suspended: !p.suspended } : p)))
@@ -69,14 +109,70 @@ export default function ManageUsers() {
 
   const bulkSuspend = async () => {
     setBulkOpen(false)
-    const ids = [...selected]
+    const ids = selected
+      .map((id) => list.find((p) => p.id === id)?.userId)
+      .filter((x): x is string => Boolean(x))
     setSelected([])
     try {
-      await Promise.all(ids.map((id) => api.post(`/admin/users/${id}/suspend/`)))
-      setList((arr) => arr.map((p) => (ids.includes(p.id) ? { ...p, suspended: true } : p)))
+      await Promise.all(ids.map((userId) => api.post(`/admin/users/${userId}/suspend/`)))
+      setList((arr) => arr.map((p) => (ids.includes(p.userId!) ? { ...p, suspended: true } : p)))
       toast.success(`${ids.length.toLocaleString('fa-IR')} حساب کاربری تعلیق شد`)
     } catch (err) {
       toast.error('تعلیق گروهی انجام نشد', err instanceof Error ? err.message : undefined)
+    }
+  }
+
+  const openEdit = (p: User) => {
+    setEditingUser(p)
+    setEditForm({
+      name: p.name || '',
+      city: p.city || '',
+      nationalId: p.nationalId || '',
+      insuranceType: p.insuranceType || '',
+      supplementaryInsurance: p.supplementaryInsurance || '',
+      gender: p.gender || '',
+      bloodType: p.bloodType || '',
+      dateOfBirth: p.dateOfBirth || '',
+      allergies: p.medicalHistory?.allergies ?? [],
+      chronicConditions: p.medicalHistory?.diagnoses ?? [],
+      emergencyName: p.emergencyContact?.name || '',
+      emergencyPhone: p.emergencyContact?.phone || '',
+      emergencyRelation: p.emergencyContact?.relationship || '',
+      receiveNotifications: p.receiveNotifications ?? true,
+      receivePromotions: p.receivePromotions ?? false,
+    })
+  }
+
+  const saveEdit = async () => {
+    if (!editingUser || !editingUser.userId) return
+    const payload: Record<string, unknown> = {
+      name: editForm.name,
+      city: editForm.city,
+      nationalId: editForm.nationalId,
+      insuranceType: editForm.insuranceType,
+      supplementaryInsurance: editForm.supplementaryInsurance,
+      receiveNotifications: editForm.receiveNotifications,
+      receivePromotions: editForm.receivePromotions,
+      allergies: editForm.allergies,
+      chronicConditions: editForm.chronicConditions,
+      emergencyContact: {
+        name: editForm.emergencyName,
+        phone: editForm.emergencyPhone,
+        relationship: editForm.emergencyRelation,
+      },
+    }
+    if (editForm.gender) payload.gender = editForm.gender
+    if (editForm.bloodType) payload.bloodType = editForm.bloodType
+    payload.dateOfBirth = editForm.dateOfBirth || null
+    try {
+      const updated = await api.patch<User>(`/admin/users/${editingUser.userId}/`, payload)
+      setList((arr) =>
+        arr.map((p) => (p.id === editingUser.id ? { ...p, ...updated } : p)),
+      )
+      setEditingUser(null)
+      toast.success('اطلاعات کاربر ویرایش شد')
+    } catch (err) {
+      toast.error('ویرایش کاربر انجام نشد', err instanceof Error ? err.message : undefined)
     }
   }
 
@@ -192,6 +288,12 @@ export default function ManageUsers() {
                             پروفایل
                           </button>
                           <button
+                            onClick={() => openEdit(p)}
+                            className="rounded-lg px-2.5 py-1 text-xs font-medium text-ink-600 transition hover:bg-ink-100"
+                          >
+                            ویرایش
+                          </button>
+                          <button
                             onClick={() => toggleSuspend(p.id)}
                             className="rounded-lg px-2.5 py-1 text-xs font-medium text-amber-600 transition hover:bg-amber-50"
                           >
@@ -291,6 +393,244 @@ export default function ManageUsers() {
           روی {toFa(selected.length)} کاربر انتخاب‌شده عملیات تعلیق انجام می‌شود.
         </p>
       </Modal>
+
+      {/* Edit user modal */}
+      <Modal
+        open={!!editingUser}
+        onClose={() => setEditingUser(null)}
+        title="ویرایش کاربر"
+        size="md"
+        footer={
+          <>
+            <PrimaryButton onClick={saveEdit}>ذخیره تغییرات</PrimaryButton>
+            <PrimaryButton variant="ghost" onClick={() => setEditingUser(null)}>انصراف</PrimaryButton>
+          </>
+        }
+      >
+        {editingUser && (
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 overflow-y-auto h-[calc(100vh-200px)]">
+            <div className="sm:col-span-2">
+              <InputField
+                label="نام و نام خانوادگی"
+                name="ename"
+                value={editForm.name}
+                onChange={(e) => setEditForm((f) => ({ ...f, name: e.target.value }))}
+              />
+            </div>
+            <InputField
+              label="کد ملی"
+              name="enationalId"
+              value={editForm.nationalId}
+              onChange={(e) => setEditForm((f) => ({ ...f, nationalId: e.target.value }))}
+            />
+            <SelectField
+              label="شهر"
+              name="ecity"
+              value={editForm.city}
+              onChange={(e) => setEditForm((f) => ({ ...f, city: e.target.value }))}
+            >
+              <option value="">انتخاب کنید</option>
+              {(defs.city || []).map((c) => (
+                <option key={c.id} value={c.name}>{c.name}</option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="نوع بیمه"
+              name="einsurance"
+              value={editForm.insuranceType}
+              onChange={(e) => setEditForm((f) => ({ ...f, insuranceType: e.target.value }))}
+            >
+              <option value="">انتخاب کنید</option>
+              {(defs.insurance_type || []).map((c) => (
+                <option key={c.id} value={c.name}>{c.name}</option>
+              ))}
+            </SelectField>
+            <SelectField
+              label="بیمه تکمیلی"
+              name="esupp"
+              value={editForm.supplementaryInsurance}
+              onChange={(e) => setEditForm((f) => ({ ...f, supplementaryInsurance: e.target.value }))}
+            >
+              <option value="">ندارد</option>
+              {(defs.supplementary_insurance || []).map((c) => (
+                <option key={c.id} value={c.name}>{c.name}</option>
+              ))}
+            </SelectField>
+            <div className="sm:col-span-2">
+              <JalaliDateSelect
+                label="تاریخ تولد (شمسی)"
+                value={editForm.dateOfBirth}
+                onChange={(iso) => setEditForm((f) => ({ ...f, dateOfBirth: iso }))}
+              />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-sm font-medium text-ink-700">
+                جنسیت
+              </label>
+              <div className="flex gap-2">
+                {[
+                  { value: 'male', label: 'مرد' },
+                  { value: 'female', label: 'زن' },
+                ].map((g) => (
+                  <button
+                    key={g.value}
+                    type="button"
+                    onClick={() => setEditForm((f) => ({ ...f, gender: g.value as 'male' | 'female' }))}
+                    className={`flex-1 rounded-xl border py-2 text-sm font-medium transition-all ${
+                      editForm.gender === g.value
+                        ? 'border-primary-400 bg-primary-50 text-primary-700'
+                        : 'border-white/50 bg-white/40 text-ink-500 hover:bg-white/60'
+                    }`}
+                  >
+                    {g.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <SelectField
+              label="گروه خونی"
+              value={editForm.bloodType}
+              onChange={(e) => setEditForm((f) => ({ ...f, bloodType: e.target.value }))}
+            >
+              <option value="">انتخاب کنید</option>
+              {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((b) => (
+                <option key={b} value={b}>{b}</option>
+              ))}
+            </SelectField>
+            <div className="sm:col-span-2">
+              <ChipMultiSelect
+                label="حساسیت‌ها"
+                options={(defs.allergy || []).map((d) => d.name)}
+                value={editForm.allergies}
+                onChange={(items) => setEditForm((f) => ({ ...f, allergies: items }))}
+                tone="red"
+              />
+            </div>
+            <div className="sm:col-span-2">
+              <ChipMultiSelect
+                label="بیماری‌های زمینه‌ای"
+                options={(defs.diagnosis || []).map((d) => d.name)}
+                value={editForm.chronicConditions}
+                onChange={(items) => setEditForm((f) => ({ ...f, chronicConditions: items }))}
+                tone="yellow"
+              />
+            </div>
+            <div className="sm:col-span-2 rounded-2xl border border-white/50 bg-white/40 p-4">
+              <p className="mb-3 text-sm font-medium text-ink-700">تماس اضطراری</p>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <InputField
+                  label="نام و نام خانوادگی"
+                  name="eemergencyName"
+                  value={editForm.emergencyName}
+                  onChange={(e) => setEditForm((f) => ({ ...f, emergencyName: e.target.value }))}
+                />
+                <InputField
+                  label="شماره تماس"
+                  name="eemergencyPhone"
+                  dir="ltr"
+                  className="text-right"
+                  value={editForm.emergencyPhone}
+                  onChange={(e) => setEditForm((f) => ({ ...f, emergencyPhone: e.target.value.replace(/[^0-9۰-۹]/g, '').slice(0, 11) }))}
+                />
+                <InputField
+                  label="نسبت"
+                  name="eemergencyRelation"
+                  value={editForm.emergencyRelation}
+                  onChange={(e) => setEditForm((f) => ({ ...f, emergencyRelation: e.target.value }))}
+                />
+              </div>
+            </div>
+            <div className="sm:col-span-2 space-y-2">
+              <Toggle
+                label="دریافت اعلان‌ها"
+                description="اعلان‌های نوبت‌ها و پیام‌ها"
+                checked={editForm.receiveNotifications}
+                onChange={(v) => setEditForm((f) => ({ ...f, receiveNotifications: v }))}
+              />
+              <Toggle
+                label="دریافت پیام‌های تبلیغاتی"
+                description="اخبار، تخفیف‌ها و پیشنهادهای ویژه"
+                checked={editForm.receivePromotions}
+                onChange={(v) => setEditForm((f) => ({ ...f, receivePromotions: v }))}
+              />
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+  )
+}
+
+function ChipMultiSelect({
+  label,
+  options,
+  value,
+  onChange,
+  tone,
+}: {
+  label: string
+  options: string[]
+  value: string[]
+  onChange: (items: string[]) => void
+  tone: 'red' | 'yellow'
+}) {
+  const [custom, setCustom] = useState('')
+  const toggle = (item: string) =>
+    onChange(value.includes(item) ? value.filter((v) => v !== item) : [...value, item])
+  const addCustom = () => {
+    const trimmed = custom.trim()
+    if (trimmed && !value.includes(trimmed)) onChange([...value, trimmed])
+    setCustom('')
+  }
+  const tones = {
+    red: 'border-red-200 bg-red-50 text-red-700',
+    yellow: 'border-yellow-200 bg-yellow-50 text-yellow-700',
+  }
+  const chips = [...new Set([...options, ...value])]
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-ink-700">{label}</label>
+      <div className="flex flex-wrap gap-1.5">
+        {chips.map((item) => {
+          const active = value.includes(item)
+          return (
+            <button
+              key={item}
+              type="button"
+              onClick={() => toggle(item)}
+              className={cn(
+                'rounded-full border px-3 py-1 text-xs font-medium transition',
+                active
+                  ? tones[tone]
+                  : 'border-white/60 bg-white/40 text-ink-500 hover:bg-white/60',
+              )}
+            >
+              {item}
+            </button>
+          )
+        })}
+      </div>
+      <div className="mt-2 flex gap-2">
+        <input
+          value={custom}
+          onChange={(e) => setCustom(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') {
+              e.preventDefault()
+              addCustom()
+            }
+          }}
+          placeholder="مورد دلخواه"
+          className="glass-input flex-1 rounded-xl px-3 py-1.5 text-sm text-ink-800 outline-none"
+        />
+        <button
+          type="button"
+          onClick={addCustom}
+          className="grid h-8 w-8 place-items-center rounded-lg bg-primary-500 text-white transition hover:bg-primary-600"
+        >
+          <IconPlus className="h-4 w-4" />
+        </button>
+      </div>
     </div>
   )
 }

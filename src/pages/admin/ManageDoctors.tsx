@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import GlassCard from '../../components/ui/GlassCard'
 import Avatar from '../../components/ui/Avatar'
@@ -8,28 +8,85 @@ import Modal from '../../components/ui/Modal'
 import InputField, { SelectField } from '../../components/ui/InputField'
 import EmptyState from '../../components/ui/EmptyState'
 import {
+  IconChat,
   IconCheck,
+  IconClock,
   IconClose,
+  IconDownload,
   IconEdit,
   IconFile,
+  IconPhone,
   IconPlus,
   IconSearch,
   IconShield,
   IconStethoscope,
+  IconTrash,
+  IconUpload,
+  IconVideo,
+  IconWallet,
 } from '../../components/ui/icons'
 import { doctorName, getSpecialty } from '../../data/apiData'
 import { api } from '../../lib/api'
 import { cn, toFa } from '../../lib/utils'
-import type { Doctor, Patient, Specialty } from '../../types'
+import type {
+  CommunicationSettings,
+  ConsultType,
+  Doctor,
+  Patient,
+  Specialty,
+  WorkingHourSlot,
+} from '../../types'
 import { toast } from '../../store/toastStore'
 
 type DocStatus = Doctor['status']
+type CommState = Record<ConsultType, { enabled: boolean; fee: number }>
+type DocBranch = 'profile' | 'comm' | 'hours' | 'payment' | 'docs'
+
+interface DefinitionItem {
+  id: string
+  name: string
+}
+
+interface DoctorDoc {
+  id: string
+  type: string
+  url: string
+  verified: boolean
+  uploadedAt: string
+}
 
 const statusMeta: Record<DocStatus, { tone: 'green' | 'amber' | 'red'; label: string }> = {
   approved: { tone: 'green', label: 'تأییدشده' },
   pending: { tone: 'amber', label: 'در انتظار' },
   suspended: { tone: 'red', label: 'معلق' },
 }
+
+const DAYS_OF_WEEK = [
+  'شنبه',
+  'یکشنبه',
+  'دوشنبه',
+  'سه‌شنبه',
+  'چهارشنبه',
+  'پنجشنبه',
+  'جمعه',
+]
+
+const commLabels: Record<ConsultType, { label: string; icon: React.ReactNode }> = {
+  chat: { label: 'چت متنی', icon: <IconChat className="h-5 w-5" /> },
+  audio: { label: 'تماس صوتی', icon: <IconPhone className="h-5 w-5" /> },
+  video: { label: 'تماس تصویری', icon: <IconVideo className="h-5 w-5" /> },
+}
+
+const BREAK_OPTIONS = [0, 5, 10, 15, 20, 30, 45, 60]
+const DURATION_OPTIONS = [5, 10, 15, 20, 30, 45, 60, 90, 120]
+
+const branchTabs: { key: DocBranch; label: string }[] = [
+  { key: 'profile', label: 'اطلاعات پایه' },
+  { key: 'comm', label: 'تعرفه و ارتباطات' },
+  { key: 'hours', label: 'ساعات کاری' },
+  { key: 'payment', label: 'اطلاعات پرداخت' },
+  { key: 'docs', label: 'مدارک' },
+]
 
 function extractResults<T>(response: T | { results: T }): T {
   if (response && typeof response === 'object' && 'results' in response) {
@@ -38,15 +95,58 @@ function extractResults<T>(response: T | { results: T }): T {
   return response as T
 }
 
+interface EditForm {
+  name: string
+  prefix: string
+  specialtyId: string
+  city: string
+  hospital: string
+  experienceYears: string
+  fee: string
+  bio: string
+  cardNumber: string
+  accountNumber: string
+  shaba: string
+  branch: DocBranch
+  comm: CommState
+  hours: WorkingHourSlot[]
+}
+
 export default function ManageDoctors() {
   const [list, setList] = useState<Doctor[]>([])
   const [patients, setPatients] = useState<Patient[]>([])
   const [specialties, setSpecialties] = useState<Specialty[]>([])
+  const [defs, setDefs] = useState<Record<string, DefinitionItem[]>>({})
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<DocStatus | 'all'>('all')
   const [searchParams] = useSearchParams()
   const [addOpen, setAddOpen] = useState(false)
   const [verifyId, setVerifyId] = useState<string | null>(null)
+  const [editingDoc, setEditingDoc] = useState<Doctor | null>(null)
+  const [editForm, setEditForm] = useState<EditForm>({
+    name: '',
+    prefix: 'دکتر',
+    specialtyId: '',
+    city: '',
+    hospital: '',
+    experienceYears: '0',
+    fee: '0',
+    bio: '',
+    cardNumber: '',
+    accountNumber: '',
+    shaba: '',
+    branch: 'profile',
+    comm: {
+      chat: { enabled: true, fee: 0 },
+      audio: { enabled: true, fee: 0 },
+      video: { enabled: true, fee: 0 },
+    },
+    hours: [],
+  })
+  const [editDocs, setEditDocs] = useState<DoctorDoc[]>([])
+  const [verifyDocs, setVerifyDocs] = useState<DoctorDoc[]>([])
+  const [uploadingDoc, setUploadingDoc] = useState(false)
+  const docInputRef = useRef<HTMLInputElement>(null)
 
   const [step, setStep] = useState<'select' | 'documents'>('select')
   const [selectedUser, setSelectedUser] = useState<string | null>(null)
@@ -61,6 +161,9 @@ export default function ManageDoctors() {
     nationalId: false,
     photo: false,
   })
+
+  const patchEdit = (patch: Partial<EditForm>) =>
+    setEditForm((f) => ({ ...f, ...patch }))
 
   useEffect(() => {
     const tab = searchParams.get('tab')
@@ -81,7 +184,40 @@ export default function ManageDoctors() {
     api.get<Specialty[]>('/doctors/specialties/', false)
       .then((res) => setSpecialties(extractResults(res)))
       .catch(() => {})
+
+    Promise.all(
+      ['city', 'prefix'].map(async (type) => {
+        try {
+          const res = await api.get<DefinitionItem[]>(`/common/definitions/?type=${type}`)
+          return [type, extractResults(res)] as const
+        } catch {
+          return [type, []] as const
+        }
+      }),
+    ).then((results) => setDefs(Object.fromEntries(results)))
   }, [])
+
+  const loadEditDocs = async (id: string) => {
+    try {
+      const res = await api.get<DoctorDoc[]>(`/admin/doctors/${id}/documents/`)
+      setEditDocs(extractResults(res))
+    } catch {
+      setEditDocs([])
+    }
+  }
+
+  const loadVerifyDocs = async (id: string) => {
+    try {
+      const res = await api.get<DoctorDoc[]>(`/admin/doctors/${id}/documents/`)
+      setVerifyDocs(extractResults(res))
+    } catch {
+      setVerifyDocs([])
+    }
+  }
+
+  useEffect(() => {
+    if (verifyId) loadVerifyDocs(verifyId)
+  }, [verifyId])
 
   const verifyDoc = verifyId ? list.find((d) => d.id === verifyId) : null
 
@@ -97,6 +233,96 @@ export default function ManageDoctors() {
     () => patients.filter((p) => !list.some((d) => d.name === p.name)).slice(0, 10),
     [list, patients],
   )
+
+  const openEditDoc = (d: Doctor) => {
+    setEditingDoc(d)
+    setEditDocs([])
+    setEditForm({
+      name: d.name || '',
+      prefix: d.prefix || 'دکتر',
+      specialtyId: d.specialtyId,
+      city: d.city || '',
+      hospital: d.hospital || '',
+      experienceYears: String(d.experienceYears || 0),
+      fee: String(d.fee || 0),
+      bio: d.bio || '',
+      cardNumber: d.cardNumber || '',
+      accountNumber: d.accountNumber || '',
+      shaba: d.shaba || '',
+      branch: 'profile',
+      comm: {
+        chat: {
+          enabled: d.communication?.chat?.enabled ?? true,
+          fee: d.communication?.chat?.fee ?? d.fee,
+        },
+        audio: {
+          enabled: d.communication?.audio?.enabled ?? true,
+          fee: d.communication?.audio?.fee ?? d.fee,
+        },
+        video: {
+          enabled: d.communication?.video?.enabled ?? true,
+          fee: d.communication?.video?.fee ?? d.fee,
+        },
+      },
+      hours: (d.workingHours || []).map((h) => ({ ...h })),
+    })
+    loadEditDocs(d.id)
+  }
+
+  const saveEditDoc = async () => {
+    if (!editingDoc) return
+    try {
+      const updated = await api.patch<Doctor>(`/admin/doctors/${editingDoc.id}/`, {
+        name: editForm.name,
+        prefix: editForm.prefix,
+        specialtyId: editForm.specialtyId,
+        city: editForm.city,
+        hospital: editForm.hospital,
+        experienceYears: Number(editForm.experienceYears) || 0,
+        fee: Number(editForm.fee) || 0,
+        bio: editForm.bio,
+        cardNumber: editForm.cardNumber,
+        accountNumber: editForm.accountNumber,
+        shaba: editForm.shaba,
+        communication: editForm.comm,
+        workingHours: editForm.hours,
+      })
+      setList((arr) => arr.map((d) => (d.id === editingDoc.id ? { ...d, ...updated } : d)))
+      setEditingDoc(null)
+      toast.success('اطلاعات پزشک ویرایش شد')
+    } catch (err) {
+      toast.error('ویرایش پزشک انجام نشد', err instanceof Error ? err.message : undefined)
+    }
+  }
+
+  const uploadDoc = async (file: File) => {
+    if (!editingDoc) return
+    setUploadingDoc(true)
+    try {
+      const form = new FormData()
+      form.append('type', 'other')
+      form.append('file', file)
+      await api.post<DoctorDoc>(`/admin/doctors/${editingDoc.id}/documents/`, form)
+      await loadEditDocs(editingDoc.id)
+      toast.success('مدرک بارگذاری شد')
+    } catch (err) {
+      toast.error('بارگذاری مدرک انجام نشد', err instanceof Error ? err.message : undefined)
+    } finally {
+      setUploadingDoc(false)
+      if (docInputRef.current) docInputRef.current.value = ''
+    }
+  }
+
+  const deleteDoc = async (docId: string) => {
+    if (!editingDoc) return
+    try {
+      await api.delete(`/admin/doctors/${editingDoc.id}/documents/?id=${docId}`)
+      setEditDocs((arr) => arr.filter((d) => d.id !== docId))
+      toast.success('مدرک حذف شد')
+    } catch {
+      toast.error('حذف مدرک انجام نشد')
+    }
+  }
 
   const setStatusOf = async (id: string, s: DocStatus) => {
     try {
@@ -138,7 +364,7 @@ export default function ManageDoctors() {
       rating: 0,
       reviewsCount: 0,
       fee: Number(fee) || 0,
-      status: allDocs ? 'pending' : 'pending',
+      status: 'pending',
       bio: '',
       workingHours: [],
     }
@@ -263,7 +489,7 @@ export default function ManageDoctors() {
                               <IconCheck className="h-4 w-4" />
                             </IconAction>
                           )}
-                          <IconAction title="ویرایش">
+                          <IconAction title="ویرایش" onClick={() => openEditDoc(d)}>
                             <IconEdit className="h-4 w-4" />
                           </IconAction>
                         </div>
@@ -381,7 +607,12 @@ export default function ManageDoctors() {
                   </option>
                 ))}
               </SelectField>
-              <InputField label="شهر" name="dcity" value={city} onChange={(e) => setCity(e.target.value)} />
+              <SelectField label="شهر" name="dcity" value={city} onChange={(e) => setCity(e.target.value)}>
+                <option value="">انتخاب کنید</option>
+                {(defs.city || []).map((c) => (
+                  <option key={c.id} value={c.name}>{c.name}</option>
+                ))}
+              </SelectField>
               <InputField label="بیمارستان / مطب" name="dhospital" value={hospital} onChange={(e) => setHospital(e.target.value)} />
               <InputField label="سابقه کار (سال)" name="dyears" type="number" value={years} onChange={(e) => setYears(e.target.value)} />
               <InputField
@@ -479,29 +710,502 @@ export default function ManageDoctors() {
             <div className="grid grid-cols-2 gap-3 text-sm">
               <Info label="سابقه کار" value={`${toFa(verifyDoc.experienceYears)} سال`} />
               <Info label="امتیاز" value={toFa(verifyDoc.rating.toFixed(1))} />
-              <Info label="شماره پروانه" value={toFa('۱۲۳۴۵۶۷')} />
               <Info label="تلفن" value={verifyDoc.phone} />
+              <Info label="شهر" value={verifyDoc.city || '—'} />
             </div>
             <div>
               <p className="mb-2 text-sm font-medium text-ink-700">مدارک پیوست</p>
-              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
-                {[
-                  { name: 'مدرک تخصص', type: 'PDF' },
-                  { name: 'کارت نظام پزشکی', type: 'JPG' },
-                  { name: 'شناسنامه', type: 'PDF' },
-                ].map((doc) => (
-                  <div key={doc.name} className="flex flex-col items-center gap-2 rounded-xl border border-white/60 bg-white/50 p-4 text-center">
-                    <IconFile className="h-7 w-7 text-primary-500" />
-                    <span className="text-xs font-medium text-ink-700">{doc.name}</span>
-                    <span className="rounded bg-primary-50 px-1.5 text-[10px] font-bold text-primary-600">{doc.type}</span>
-                    <button className="text-[11px] font-medium text-primary-600 hover:underline">دانلود</button>
-                  </div>
-                ))}
-              </div>
+              {verifyDocs.length > 0 ? (
+                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                  {verifyDocs.map((doc) => (
+                    <div key={doc.id} className="flex flex-col items-center gap-2 rounded-xl border border-white/60 bg-white/50 p-4 text-center">
+                      <IconFile className="h-7 w-7 text-primary-500" />
+                      <span className="truncate text-xs font-medium text-ink-700">{doc.type}</span>
+                      <span className="rounded bg-primary-50 px-1.5 text-[10px] font-bold text-primary-600 uppercase">{doc.type}</span>
+                      <a href={doc.url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-[11px] font-medium text-primary-600 hover:underline">
+                        <IconDownload className="h-3 w-3" /> دانلود
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-sm text-ink-400">مدرکی ثبت نشده است.</p>
+              )}
             </div>
           </div>
         )}
       </Modal>
+
+      {/* Edit doctor modal */}
+      <Modal
+        open={!!editingDoc}
+        onClose={() => setEditingDoc(null)}
+        title="ویرایش پزشک"
+        size="lg"
+        footer={
+          <>
+            <PrimaryButton onClick={saveEditDoc}>ذخیره تغییرات</PrimaryButton>
+            <PrimaryButton variant="ghost" onClick={() => setEditingDoc(null)}>انصراف</PrimaryButton>
+          </>
+        }
+      >
+        {editingDoc && (
+          <div className="space-y-4 overflow-y-auto h-[calc(100vh-200px)] ">
+            <div className="flex flex-wrap gap-1.5 ">
+              {branchTabs.map((t) => (
+                <button
+                  key={t.key}
+                  type="button"
+                  onClick={() => patchEdit({ branch: t.key })}
+                  className={cn(
+                    'rounded-xl px-3 py-2 text-xs font-medium transition',
+                    editForm.branch === t.key
+                      ? 'bg-primary-500 text-white shadow-glass-sm'
+                      : 'bg-white/40 text-ink-500 hover:bg-white/60',
+                  )}
+                >
+                  {t.label}
+                </button>
+              ))}
+            </div>
+
+            {editForm.branch === 'profile' && (
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                <div className="sm:col-span-2">
+                  <InputField
+                    label="نام و نام خانوادگی (بدون پیشوند)"
+                    name="edname"
+                    value={editForm.name}
+                    onChange={(e) => patchEdit({ name: e.target.value })}
+                  />
+                </div>
+                <SelectField
+                  label="پیشوند"
+                  name="edprefix"
+                  value={editForm.prefix}
+                  onChange={(e) => patchEdit({ prefix: e.target.value })}
+                >
+                  {(defs.prefix || []).map((p) => (
+                    <option key={p.id} value={p.name}>{p.name}</option>
+                  ))}
+                </SelectField>
+                <SelectField
+                  label="تخصص"
+                  name="edspec"
+                  value={editForm.specialtyId}
+                  onChange={(e) => patchEdit({ specialtyId: e.target.value })}
+                >
+                  {specialties.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.icon} {s.name}
+                    </option>
+                  ))}
+                </SelectField>
+                <SelectField
+                  label="شهر"
+                  name="edcity"
+                  value={editForm.city}
+                  onChange={(e) => patchEdit({ city: e.target.value })}
+                >
+                  <option value="">انتخاب کنید</option>
+                  {(defs.city || []).map((c) => (
+                    <option key={c.id} value={c.name}>{c.name}</option>
+                  ))}
+                </SelectField>
+                <InputField
+                  label="بیمارستان / مطب"
+                  name="edhospital"
+                  value={editForm.hospital}
+                  onChange={(e) => patchEdit({ hospital: e.target.value })}
+                />
+                <InputField
+                  label="سابقه کار (سال)"
+                  name="edyears"
+                  type="number"
+                  value={editForm.experienceYears}
+                  onChange={(e) => patchEdit({ experienceYears: e.target.value })}
+                />
+                              <div className="sm:col-span-2">
+                  <InputField
+                    label="بیوگرافی"
+                    name="edbio"
+                    value={editForm.bio}
+                    onChange={(e) => patchEdit({ bio: e.target.value })}
+                  />
+                </div>
+              </div>
+            )}
+
+            {editForm.branch === 'comm' && (
+              <AdminCommEditor
+                comm={editForm.comm}
+                onChange={(comm) => patchEdit({ comm })}
+              />
+            )}
+
+            {editForm.branch === 'hours' && (
+              <AdminHoursEditor
+                hours={editForm.hours}
+                onChange={(hours) => patchEdit({ hours })}
+              />
+            )}
+
+            {editForm.branch === 'payment' && (
+              <div className="space-y-4">
+                <p className="text-xs text-ink-400">اطلاعات بانکی برای واریز درآمدها.</p>
+                <InputField
+                  label="شماره کارت"
+                  name="edcard"
+                  dir="ltr"
+                  className="text-right"
+                  value={editForm.cardNumber}
+                  onChange={(e) => patchEdit({ cardNumber: e.target.value })}
+                  placeholder="6037-XXXX-XXXX-XXXX"
+                />
+                <InputField
+                  label="شماره حساب"
+                  name="edaccount"
+                  dir="ltr"
+                  className="text-right"
+                  value={editForm.accountNumber}
+                  onChange={(e) => patchEdit({ accountNumber: e.target.value })}
+                />
+                <InputField
+                  label="شماره شبا"
+                  name="edshaba"
+                  dir="ltr"
+                  className="text-right"
+                  value={editForm.shaba}
+                  onChange={(e) => patchEdit({ shaba: e.target.value })}
+                  placeholder="IRXXXXXXXXXXXXXXXXXXX"
+                />
+              </div>
+            )}
+
+            {editForm.branch === 'docs' && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-medium text-ink-700">مدارک پزشک</p>
+                  <button
+                    type="button"
+                    onClick={() => docInputRef.current?.click()}
+                    disabled={uploadingDoc}
+                    className="flex items-center gap-1.5 rounded-xl bg-primary-500 px-3 py-2 text-xs font-medium text-white transition hover:bg-primary-600 disabled:opacity-50"
+                  >
+                    {uploadingDoc ? (
+                      <IconClock className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <IconUpload className="h-4 w-4" />
+                    )}
+                    {uploadingDoc ? 'در حال بارگذاری…' : 'افزودن مدرک'}
+                  </button>
+                  <input
+                    ref={docInputRef}
+                    type="file"
+                    className="hidden"
+                    accept=".pdf,.jpg,.jpeg,.png"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0]
+                      if (file) uploadDoc(file)
+                    }}
+                  />
+                </div>
+                {editDocs.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                    {editDocs.map((doc) => (
+                      <div
+                        key={doc.id}
+                        className="flex items-center gap-3 rounded-xl border border-white/60 bg-white/50 p-3"
+                      >
+                        <IconFile className="h-6 w-6 shrink-0 text-primary-500" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-ink-700">{doc.type}</p>
+                          <p className="truncate text-[11px] text-ink-400" dir="ltr">{doc.type}</p>
+                        </div>
+                        <a
+                          href={doc.url}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="grid h-8 w-8 place-items-center rounded-lg text-ink-500 transition hover:bg-primary-50 hover:text-primary-600"
+                          title="دانلود"
+                        >
+                          <IconDownload className="h-4 w-4" />
+                        </a>
+                        <button
+                          onClick={() => deleteDoc(doc.id)}
+                          className="grid h-8 w-8 place-items-center rounded-lg text-ink-400 transition hover:bg-red-50 hover:text-red-500"
+                          title="حذف"
+                        >
+                          <IconTrash className="h-4 w-4" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-ink-400">مدرکی برای این پزشک ثبت نشده است.</p>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
+    </div>
+  )
+}
+
+function AdminCommEditor({
+  comm,
+  onChange,
+}: {
+  comm: CommState
+  onChange: (comm: CommState) => void
+}) {
+  const [error, setError] = useState('')
+  const update = (type: ConsultType, patch: Partial<{ enabled: boolean; fee: number }>) =>
+    onChange({ ...comm, [type]: { ...comm[type], ...patch } })
+  const toggle = (type: ConsultType) => {
+    const next = { ...comm, [type]: { ...comm[type], enabled: !comm[type].enabled } }
+    if (!Object.values(next).some((c) => c.enabled)) {
+      setError('حداقل یکی از روش‌های ارتباطی باید فعال باشد')
+      return
+    }
+    setError('')
+    onChange(next)
+  }
+  const setFee = (type: ConsultType, value: string) => {
+    const num = Number(value.replace(/[^0-9]/g, '')) || 0
+    onChange({ ...comm, [type]: { ...comm[type], fee: num } })
+  }
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-ink-400">روش‌های مشاوره و تعرفه هر یک را تنظیم کنید.</p>
+      {(Object.keys(commLabels) as ConsultType[]).map((type) => (
+        <div
+          key={type}
+          className={cn(
+            'rounded-2xl border p-4 transition-all',
+            comm[type].enabled ? 'border-primary-300 bg-primary-50/60' : 'border-white/50 bg-white/40',
+          )}
+        >
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div
+                className={cn(
+                  'grid h-10 w-10 place-items-center rounded-xl transition-all',
+                  comm[type].enabled ? 'bg-primary-500 text-white' : 'bg-white/60 text-ink-400',
+                )}
+              >
+                {commLabels[type].icon}
+              </div>
+              <span className="text-sm font-medium text-ink-700">{commLabels[type].label}</span>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={comm[type].enabled}
+              onClick={() => toggle(type)}
+              className={cn(
+                'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full transition-colors',
+                comm[type].enabled ? 'bg-primary-500' : 'bg-ink-200',
+              )}
+            >
+              <span
+                className={cn(
+                  'inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform',
+                  comm[type].enabled ? '-translate-x-6' : '-translate-x-1',
+                )}
+              />
+            </button>
+          </div>
+          {comm[type].enabled && (
+            <div className="mt-3 animate-fade-in">
+              <label className="mb-1 block text-xs font-medium text-ink-500">
+                تعرفه ویزیت (
+                {type === 'chat' ? 'چت' : type === 'audio' ? 'صوتی' : 'تصویری'}
+                )
+              </label>
+              <div className="relative">
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={comm[type].fee.toLocaleString('en-US')}
+                  onChange={(e) => setFee(type, e.target.value)}
+                  className="glass-input w-full rounded-xl py-2 pr-3 pl-16 text-left text-sm tabular text-ink-800 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-200"
+                />
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-ink-400">
+                  تومان
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      ))}
+      {error && <p className="text-xs text-red-500">{error}</p>}
+    </div>
+  )
+}
+
+function AdminHoursEditor({
+  hours,
+  onChange,
+}: {
+  hours: WorkingHourSlot[]
+  onChange: (hours: WorkingHourSlot[]) => void
+}) {
+  const [error, setError] = useState('')
+  const isOverlap = (
+    day: string,
+    from: string,
+    to: string,
+    excludeIdx?: number,
+  ) =>
+    hours.some(
+      (h, i) =>
+        i !== excludeIdx &&
+        h.day === day &&
+        ((from >= h.from && from < h.to) ||
+          (to > h.from && to <= h.to) ||
+          (from <= h.from && to >= h.to)),
+    )
+
+  const addSlot = (day: string, from: string, to: string) => {
+    if (from >= to) return
+    if (isOverlap(day, from, to)) {
+      setError('این بازه با بازه‌های تعریف‌شده تداخل دارد')
+      return
+    }
+    setError('')
+    onChange([
+      ...hours,
+      { day, from, to, breakMinutes: 15, appointmentDurationMinutes: 30 },
+    ])
+  }
+
+  const updateSlot = (idx: number, patch: Partial<WorkingHourSlot>) => {
+    const updated = hours.map((h, i) => (i === idx ? { ...h, ...patch } : h))
+    const item = updated[idx]
+    if (isOverlap(item.day, item.from, item.to, idx)) {
+      setError('این بازه با بازه‌های تعریف‌شده تداخل دارد')
+      return
+    }
+    setError('')
+    onChange(updated)
+  }
+
+  const removeSlot = (idx: number) => onChange(hours.filter((_, i) => i !== idx))
+
+  const hoursByDay = DAYS_OF_WEEK.map((day) => ({
+    day,
+    slots: hours.filter((h) => h.day === day),
+  }))
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-ink-400">
+        تعریف بازه‌های زمانی برای هر روز هفته. بازه‌های متداخل مجاز نیستند.
+      </p>
+      {error && <p className="text-xs text-red-500">{error}</p>}
+      {hoursByDay.map(({ day, slots }) => {
+        const slotIdxs = slots
+          .map((s) => hours.indexOf(s))
+          .filter((i) => i >= 0)
+        return (
+          <div key={day} className="glass-soft overflow-hidden rounded-2xl">
+            <div className="flex items-center justify-between bg-white/30 px-4 py-2.5">
+              <span className="text-sm font-semibold text-ink-700">{day}</span>
+              <span className="text-[11px] text-ink-400 tabular">
+                {slots.length > 0 ? `${slots.length} بازه` : 'تعریف نشده'}
+              </span>
+            </div>
+            {slotIdxs.length > 0 && (
+              <div className="space-y-1.5 p-3 flex flex-wrap gap-1">
+                {slotIdxs.map((idx) => (
+                  <div key={idx} className="rounded-xl border border-primary-500 bg-primary-100 p-2.5 max-w-[320px]">
+                    <div className="flex items-center gap-2 bg-primary-100 rounded-lg px-2">
+                      <span className="text-xs text-ink-400">از</span>
+                      <input
+                        type="time"
+                        value={hours[idx].from}
+                        onChange={(e) => updateSlot(idx, { from: e.target.value })}
+                        className="min-w-[90px] flex-1 rounded-lg bg-transparent px-1 py-1 text-sm tabular text-ink-700 outline-none"
+                      />
+                      <span className="text-xs text-ink-400">تا</span>
+                      <input
+                        type="time"
+                        value={hours[idx].to}
+                        onChange={(e) => updateSlot(idx, { to: e.target.value })}
+                        className="min-w-[90px] flex-1 rounded-lg bg-transparent px-1 py-1 text-sm tabular text-ink-700 outline-none"
+                      />
+                      <button
+                        onClick={() => removeSlot(idx)}
+                        className="grid h-7 w-7 shrink-0 place-items-center rounded-lg text-ink-400 hover:bg-red-50 hover:text-red-500"
+                      >
+                        <IconTrash className="h-3.5 w-3.5" />
+                      </button>
+                    </div>
+                    <div className="mt-1.5 flex items-center gap-4 pr-1 flex-wrap">
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-ink-400">استراحت:</span>
+                        <select
+                          value={hours[idx].breakMinutes ?? 15}
+                          onChange={(e) => updateSlot(idx, { breakMinutes: Number(e.target.value) })}
+                          className="rounded-lg border border-white/50 bg-white/50 px-2 py-1 text-xs tabular text-ink-700 outline-none"
+                        >
+                          {BREAK_OPTIONS.map((v) => (
+                            <option key={v} value={v}>{v}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] text-ink-400">مدت ویزیت:</span>
+                        <select
+                          value={hours[idx].appointmentDurationMinutes ?? 30}
+                          onChange={(e) => updateSlot(idx, { appointmentDurationMinutes: Number(e.target.value) })}
+                          className="rounded-lg border border-white/50 bg-white/50 px-2 py-1 text-xs tabular text-ink-700 outline-none"
+                        >
+                          {DURATION_OPTIONS.map((v) => (
+                            <option key={v} value={v}>{v}</option>
+                          ))}
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+            <AdminSlotAdder day={day} onAdd={addSlot} />
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
+function AdminSlotAdder({ day, onAdd }: { day: string; onAdd: (day: string, from: string, to: string) => void }) {
+  const [from, setFrom] = useState('08:00')
+  const [to, setTo] = useState('10:00')
+  return (
+    <div className="flex items-center gap-2 border-t border-primary-200 bg-primary-100 px-3 py-2">
+      <input
+        type="time"
+        value={from}
+        onChange={(e) => setFrom(e.target.value)}
+        className="min-w-[80px] flex-1 rounded-lg border border-white/50 bg-white/50 px-2 py-1.5 text-sm tabular text-ink-700 outline-none"
+      />
+      <span className="text-xs text-ink-400">تا</span>
+      <input
+        type="time"
+        value={to}
+        onChange={(e) => setTo(e.target.value)}
+        className="min-w-[80px] flex-1 rounded-lg border border-white/50 bg-white/50 px-2 py-1.5 text-sm tabular text-ink-700 outline-none"
+      />
+      <button
+        onClick={() => onAdd(day, from, to)}
+        className="flex items-center gap-1 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-600 active:scale-[.97]"
+      >
+        <IconPlus className="h-3.5 w-3.5" />
+        افزودن بازه
+      </button>
     </div>
   )
 }

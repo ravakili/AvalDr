@@ -52,6 +52,7 @@ interface DashboardData {
   completedAppointments: number
   pendingWithdrawals: number
   revenue: number
+  appointmentTrend?: { date: string; day: string; count: number }[]
 }
 
 function extractResults<T>(response: T | { results: T }): T {
@@ -115,18 +116,13 @@ export default function AdminOverview() {
           </div>
         </ChartCard>
 
-        <ChartCard title="روند نوبت‌ها" subtitle="هفتگی">
+        <ChartCard title="روند نوبت‌ها" subtitle="۷ روز گذشته">
           <div className="h-64" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
-              <LineChart data={[
-                { day: 'شنبه', count: 12 }, { day: 'یکشنبه', count: 18 },
-                { day: 'دوشنبه', count: 15 }, { day: 'سه‌شنبه', count: 22 },
-                { day: 'چهارشنبه', count: 19 }, { day: 'پنجشنبه', count: 25 },
-                { day: 'جمعه', count: 8 },
-              ]} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
+              <LineChart data={dashboard?.appointmentTrend ?? []} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
                 <XAxis dataKey="day" tick={{ fontSize: 10, fontFamily: 'Vazirmatn' }} stroke={chartAxisColor} />
-                <YAxis tick={{ fontSize: 11 }} stroke={chartAxisColor} tickFormatter={(v) => toFa(v)} />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke={chartAxisColor} tickFormatter={(v) => toFa(v)} />
                 <Tooltip contentStyle={tooltipStyle} formatter={(v) => [toFa(Number(v)), 'نوبت']} />
                 <Line type="monotone" dataKey="count" stroke={primaryChartColor} strokeWidth={3} dot={{ r: 4, fill: primaryChartColor }} />
               </LineChart>
