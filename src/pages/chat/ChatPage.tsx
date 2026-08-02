@@ -414,7 +414,7 @@ export default function ChatPage() {
     (isAdmin || activeAppt?.status === "in-progress");
 
   return (
-    <div className="flex h-[calc(100vh-9rem)] gap-4">
+    <div className="flex h-[calc(100vh-13rem)] md:h-[calc(100vh-9.2rem)] gap-4">
       {/* ===== Chat list sidebar (desktop) ===== */}
       <ChatList
         className="max-lg:hidden"
@@ -546,14 +546,14 @@ export default function ChatPage() {
                       ? `${doctor.specialtyName || ""} • `
                       : ""}
                     {isDoctor && patient
-                      ? `${patient.gender === "male" ? "آقا" : "خانم"} • ${toFa(patient.age)} سال • ${patient.city}`
+                      ? `${toFa(patient.age)} ساله • ${patient.city}`
                       : ""}
                     {(!isDoctor && !isAdmin && doctor?.specialtyName) || ""}
                     {activeAppt &&
                       ` • ${formatDateFa(activeAppt.date)} ${toFa(activeAppt.time)}`}
                   </p>
                 </div>
-                {!isAdminChat &&
+                {/* {!isAdminChat &&
                   activeAppt?.status === "in-progress" &&
                   closeCountdown && (
                     <div
@@ -563,7 +563,7 @@ export default function ChatPage() {
                       <IconClock className="ml-1 inline h-3 w-3" />
                       {closeCountdown}
                     </div>
-                  )}
+                  )} */}
                 <div className="flex gap-2">
                   {!isAdminChat && activeAppt?.status === "in-progress" && (
                     <>

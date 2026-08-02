@@ -1,6 +1,8 @@
 import { Navigate, Route, Routes } from "react-router-dom";
+import { useEffect } from "react";
 import ProtectedRoute from "./components/ProtectedRoute";
 import { useAuthStore } from "./store/authStore";
+import { AUTH_EXPIRED_EVENT } from "./lib/api";
 
 // Onboarding
 import PWAInstallGuide from "./pages/onboarding/PWAInstallGuide";
@@ -74,6 +76,14 @@ function RootRedirect() {
 }
 
 export default function App() {
+  const logout = useAuthStore((s) => s.logout);
+
+  useEffect(() => {
+    const handleAuthExpired = () => logout();
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    return () => window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+  }, [logout]);
+
   return (
     <Routes>
       <Route path="/" element={<OnboardingGuard />} />

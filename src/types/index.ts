@@ -55,6 +55,12 @@ export interface Doctor extends Person {
   cardNumber?: string
   accountNumber?: string
   shaba?: string
+  nationalId?: string
+  gender?: string
+  dateOfBirth?: string
+  bloodType?: string
+  insuranceType?: string
+  supplementaryInsurance?: string
 }
 
 export interface Patient extends Person {
@@ -177,6 +183,7 @@ export interface UploadingFile {
 
 export interface UserData {
   name: string
+  nationalId: string
   dateOfBirth: string
   gender: 'male' | 'female'
   bloodType: string

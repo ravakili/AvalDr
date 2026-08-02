@@ -14,12 +14,13 @@ import {
   IconClock,
   IconClose,
   IconPlus,
+  IconPrescription,
   IconRefresh,
   IconSearch,
   IconVideo,
   IconWallet,
 } from "../../components/ui/icons";
-import { doctorName, getDoctor } from "../../data/apiData";
+import { doctorName, getDoctor, prescriptions } from "../../data/apiData";
 import {
   cn,
   formatDateFa,
@@ -27,7 +28,7 @@ import {
   relativeDay,
   toFa,
 } from "../../lib/utils";
-import type { AppointmentStatus } from "../../types";
+import type { AppointmentStatus, Prescription } from "../../types";
 import { useAuthStore } from "../../store/authStore";
 import { useUserStore } from "../../store/userStore";
 import { api } from "../../lib/api";
@@ -52,6 +53,7 @@ export default function MyAppointments() {
   const [rescheduleSlots, setRescheduleSlots] = useState<string[]>([]);
   const [rescheduleLoading, setRescheduleLoading] = useState(false);
   const [cancelId, setCancelId] = useState<string | null>(null);
+  const [selectedRx, setSelectedRx] = useState<Prescription | null>(null);
 
   const todayStr = new Date().toISOString().slice(0, 10);
 
@@ -318,9 +320,21 @@ export default function MyAppointments() {
                       </>
                     )}
                     {a.status === "completed" && (
-                      <PrimaryButton size="sm" variant="subtle">
-                        مشاهده نسخه
-                      </PrimaryButton>
+                      prescriptions.some((p) => p.appointmentId === a.id) && (
+                        <PrimaryButton
+                          size="sm"
+                          variant="subtle"
+                          icon={<IconPrescription className="h-4 w-4" />}
+                          onClick={() =>
+                            setSelectedRx(
+                              prescriptions.find((p) => p.appointmentId === a.id) ||
+                                null,
+                            )
+                          }
+                        >
+                          مشاهده نسخه
+                        </PrimaryButton>
+                      )
                     )}
                   </div>
                 </div>
@@ -441,6 +455,71 @@ export default function MyAppointments() {
           <p className="py-6 text-center text-sm text-ink-400">
             زمان آزادی برای این روز در دسترس نیست.
           </p>
+        )}
+      </Modal>
+
+      {/* Prescription details */}
+      <Modal
+        open={!!selectedRx}
+        onClose={() => setSelectedRx(null)}
+        title="جزئیات نسخه"
+      >
+        {selectedRx && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-2xl border border-white/50 bg-white/40 p-4">
+              <div className="flex items-center gap-3">
+                <Avatar src={getDoctor(selectedRx.doctorId)?.avatar} size="md" ring />
+                <div>
+                  <p className="text-sm font-bold text-ink-800">
+                    {doctorName(getDoctor(selectedRx.doctorId)) || "پزشک"}
+                  </p>
+                  <p className="text-xs text-ink-400">
+                    {formatDateFa(selectedRx.createdAt.slice(0, 10))}
+                  </p>
+                </div>
+              </div>
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary-50 text-primary-500">
+                <IconPrescription className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {selectedRx.items.map((item, i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-white/50 bg-white/40 p-4"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-ink-800">
+                      💊 {item.drug}
+                    </p>
+                    {item.dosage && (
+                      <span className="rounded-full bg-primary-50 px-2.5 py-0.5 text-[10px] font-medium text-primary-700">
+                        {item.dosage}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-ink-600">{item.usage}</p>
+                  {item.duration && (
+                    <p className="mt-1 text-xs text-ink-400">
+                      مدت مصرف: {item.duration}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {selectedRx.notes && (
+              <div className="rounded-2xl border border-amber-200/70 bg-amber-50/60 p-4">
+                <p className="text-xs font-semibold text-amber-700">
+                  دستورات پزشک
+                </p>
+                <p className="mt-1 text-xs leading-6 text-amber-800">
+                  {selectedRx.notes}
+                </p>
+              </div>
+            )}
+          </div>
         )}
       </Modal>
     </div>

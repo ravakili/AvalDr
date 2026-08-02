@@ -147,6 +147,11 @@ export default function ProfileCompletion() {
   const validateStep1 = () => {
     const e: Record<string, string> = {};
     if (!userData.name.trim()) e.name = "نام و نام خانوادگی الزامی است";
+    if (!userData.nationalId.trim()) {
+      e.nationalId = "کد ملی الزامی است";
+    } else if (!/^\d{10}$/.test(userData.nationalId.trim())) {
+      e.nationalId = "کد ملی باید ۱۰ رقم باشد";
+    }
     setErrors(e);
     return Object.keys(e).length === 0;
   };
@@ -260,6 +265,24 @@ export default function ProfileCompletion() {
                   setErrors((prev) => ({ ...prev, name: "" }));
                 }}
                 error={errors.name}
+              />
+
+              <InputField
+                label="کد ملی *"
+                name="nationalId"
+                placeholder="۱۰ رقم"
+                dir="ltr"
+                className="text-right"
+                inputMode="numeric"
+                maxLength={10}
+                value={userData.nationalId}
+                onChange={(e) => {
+                  setUserData({
+                    nationalId: e.target.value.replace(/[^\d]/g, "").slice(0, 10),
+                  });
+                  setErrors((prev) => ({ ...prev, nationalId: "" }));
+                }}
+                error={errors.nationalId}
               />
 
               <JalaliDateSelect
@@ -423,10 +446,10 @@ export default function ProfileCompletion() {
                   <div
                     onClick={() => setIsDoctor(!isDoctor)}
                     className={cn(
-                      "grid h-6 w-6 shrink-0 place-items-center rounded-lg border-2 transition-all",
+                      "grid h-6 w-6 shrink-0 place-items-center rounded-lg border-2 transition-all border-primary-500",
                       isDoctor
                         ? "border-primary-500 bg-primary-500 text-white"
-                        : "border-white/60 bg-white/40 text-transparent",
+                        : "border-primary-500 bg-white/40 text-transparent",
                     )}
                   >
                     {isDoctor && (

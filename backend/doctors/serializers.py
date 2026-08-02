@@ -113,6 +113,11 @@ class DoctorSerializer(serializers.ModelSerializer):
     communication = CommunicationSettingSerializer(source='comm_settings', read_only=True)
     cardNumber = serializers.CharField(source='card_number', read_only=True)
     accountNumber = serializers.CharField(source='account_number', read_only=True)
+    nationalId = serializers.CharField(source='national_id', read_only=True)
+    dateOfBirth = serializers.DateField(source='birth_date', read_only=True)
+    bloodType = serializers.CharField(source='blood_type', read_only=True)
+    insuranceType = serializers.CharField(source='insurance_type', read_only=True)
+    supplementaryInsurance = serializers.CharField(source='supplementary_insurance', read_only=True)
 
     class Meta:
         model = DoctorProfile
@@ -122,6 +127,7 @@ class DoctorSerializer(serializers.ModelSerializer):
             'rating', 'reviewsCount', 'fee', 'status', 'bio', 'workingHours', 'verified',
             'communication',
             'cardNumber', 'accountNumber', 'shaba',
+            'nationalId', 'gender', 'dateOfBirth', 'bloodType', 'insuranceType', 'supplementaryInsurance',
         )
         read_only_fields = ('id', 'userId', 'rating', 'reviewsCount', 'status', 'verified')
 
@@ -143,12 +149,18 @@ class DoctorProfileUpdateSerializer(serializers.ModelSerializer):
     experienceYears = serializers.IntegerField(source='experience_years', min_value=0, required=False)
     cardNumber = serializers.CharField(source='card_number', required=False, allow_blank=True)
     accountNumber = serializers.CharField(source='account_number', required=False, allow_blank=True)
+    nationalId = serializers.CharField(source='national_id', required=False, allow_blank=True)
+    dateOfBirth = serializers.DateField(source='birth_date', required=False, allow_null=True)
+    bloodType = serializers.CharField(source='blood_type', required=False, allow_blank=True)
+    insuranceType = serializers.CharField(source='insurance_type', required=False, allow_blank=True)
+    supplementaryInsurance = serializers.CharField(source='supplementary_insurance', required=False, allow_blank=True)
 
     class Meta:
         model = DoctorProfile
         fields = (
             'name', 'prefix', 'avatar', 'specialtyId', 'city', 'hospital', 'address',
             'location', 'experienceYears', 'fee', 'bio', 'cardNumber', 'accountNumber', 'shaba',
+            'nationalId', 'gender', 'dateOfBirth', 'bloodType', 'insuranceType', 'supplementaryInsurance',
         )
 
     def update(self, instance, validated_data):

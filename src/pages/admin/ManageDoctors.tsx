@@ -7,6 +7,7 @@ import Badge from '../../components/ui/Badge'
 import Modal from '../../components/ui/Modal'
 import InputField, { SelectField } from '../../components/ui/InputField'
 import EmptyState from '../../components/ui/EmptyState'
+import JalaliDateSelect from '../../components/ui/JalaliDateSelect'
 import {
   IconChat,
   IconCheck,
@@ -107,6 +108,12 @@ interface EditForm {
   cardNumber: string
   accountNumber: string
   shaba: string
+  nationalId: string
+  gender: string
+  birthDate: string
+  bloodType: string
+  insuranceType: string
+  supplementaryInsurance: string
   branch: DocBranch
   comm: CommState
   hours: WorkingHourSlot[]
@@ -135,6 +142,12 @@ export default function ManageDoctors() {
     cardNumber: '',
     accountNumber: '',
     shaba: '',
+    nationalId: '',
+    gender: '',
+    birthDate: '',
+    bloodType: '',
+    insuranceType: '',
+    supplementaryInsurance: '',
     branch: 'profile',
     comm: {
       chat: { enabled: true, fee: 0 },
@@ -186,7 +199,7 @@ export default function ManageDoctors() {
       .catch(() => {})
 
     Promise.all(
-      ['city', 'prefix'].map(async (type) => {
+      ['city', 'prefix', 'insurance_type', 'supplementary_insurance'].map(async (type) => {
         try {
           const res = await api.get<DefinitionItem[]>(`/common/definitions/?type=${type}`)
           return [type, extractResults(res)] as const
@@ -249,6 +262,12 @@ export default function ManageDoctors() {
       cardNumber: d.cardNumber || '',
       accountNumber: d.accountNumber || '',
       shaba: d.shaba || '',
+      nationalId: d.nationalId || '',
+      gender: d.gender || '',
+      birthDate: d.dateOfBirth || '',
+      bloodType: d.bloodType || '',
+      insuranceType: d.insuranceType || '',
+      supplementaryInsurance: d.supplementaryInsurance || '',
       branch: 'profile',
       comm: {
         chat: {
@@ -284,6 +303,12 @@ export default function ManageDoctors() {
         cardNumber: editForm.cardNumber,
         accountNumber: editForm.accountNumber,
         shaba: editForm.shaba,
+        nationalId: editForm.nationalId,
+        gender: editForm.gender,
+        dateOfBirth: editForm.birthDate || null,
+        bloodType: editForm.bloodType,
+        insuranceType: editForm.insuranceType,
+        supplementaryInsurance: editForm.supplementaryInsurance,
         communication: editForm.comm,
         workingHours: editForm.hours,
       })
@@ -818,6 +843,66 @@ export default function ManageDoctors() {
                   value={editForm.hospital}
                   onChange={(e) => patchEdit({ hospital: e.target.value })}
                 />
+                <InputField
+                  label="کد ملی"
+                  name="ednationalId"
+                  dir="ltr"
+                  className="text-right"
+                  inputMode="numeric"
+                  maxLength={10}
+                  value={editForm.nationalId}
+                  onChange={(e) =>
+                    patchEdit({ nationalId: e.target.value.replace(/[^\d]/g, '').slice(0, 10) })
+                  }
+                />
+                <SelectField
+                  label="جنسیت"
+                  name="edgender"
+                  value={editForm.gender}
+                  onChange={(e) => patchEdit({ gender: e.target.value })}
+                >
+                  <option value="">انتخاب کنید</option>
+                  <option value="male">مرد</option>
+                  <option value="female">زن</option>
+                </SelectField>
+                <JalaliDateSelect
+                  label="تاریخ تولد (شمسی)"
+                  value={editForm.birthDate}
+                  onChange={(iso) => patchEdit({ birthDate: iso })}
+                />
+                <SelectField
+                  label="گروه خونی"
+                  name="edbloodType"
+                  value={editForm.bloodType}
+                  onChange={(e) => patchEdit({ bloodType: e.target.value })}
+                >
+                  <option value="">انتخاب کنید</option>
+                  {['A+', 'A-', 'B+', 'B-', 'AB+', 'AB-', 'O+', 'O-'].map((b) => (
+                    <option key={b} value={b}>{b}</option>
+                  ))}
+                </SelectField>
+                <SelectField
+                  label="بیمه پایه"
+                  name="edinsurance"
+                  value={editForm.insuranceType}
+                  onChange={(e) => patchEdit({ insuranceType: e.target.value })}
+                >
+                  <option value="">انتخاب کنید</option>
+                  {(defs.insurance_type || []).map((d) => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
+                </SelectField>
+                <SelectField
+                  label="بیمه تکمیلی"
+                  name="edsupp"
+                  value={editForm.supplementaryInsurance}
+                  onChange={(e) => patchEdit({ supplementaryInsurance: e.target.value })}
+                >
+                  <option value="">ندارد</option>
+                  {(defs.supplementary_insurance || []).map((d) => (
+                    <option key={d.id} value={d.name}>{d.name}</option>
+                  ))}
+                </SelectField>
                 <InputField
                   label="سابقه کار (سال)"
                   name="edyears"

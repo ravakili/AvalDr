@@ -96,6 +96,7 @@ class VerifyOTPSerializer(SendOTPSerializer):
 
 class CompleteProfileSerializer(serializers.Serializer):
     name = serializers.CharField(max_length=100)
+    nationalId = serializers.CharField(max_length=10, required=False, allow_blank=True)
     dateOfBirth = serializers.DateField(required=False, allow_null=True)
     gender = serializers.ChoiceField(choices=('male', 'female'), required=False, allow_blank=True)
     bloodType = serializers.CharField(max_length=5, required=False, allow_blank=True)
@@ -147,6 +148,12 @@ class CompleteProfileSerializer(serializers.Serializer):
                     'prefix': 'دکتر',
                     'specialty': data['specialty'],
                     'city': data.get('city', ''),
+                    'national_id': data.get('nationalId', ''),
+                    'gender': data.get('gender', ''),
+                    'birth_date': data.get('dateOfBirth'),
+                    'blood_type': data.get('bloodType', ''),
+                    'insurance_type': data.get('insuranceType', ''),
+                    'supplementary_insurance': data.get('supplementaryInsurance', ''),
                     'hospital': data.get('hospital', ''),
                     'experience_years': data.get('experienceYears', 0),
                 },
@@ -158,6 +165,7 @@ class CompleteProfileSerializer(serializers.Serializer):
                 user=user,
                 defaults={
                     'full_name': data['name'],
+                    'national_id': data.get('nationalId', ''),
                     'birth_date': data.get('dateOfBirth'),
                     'gender': data.get('gender', ''),
                     'blood_type': data.get('bloodType', ''),

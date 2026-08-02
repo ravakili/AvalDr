@@ -6,6 +6,7 @@ import Badge from "../../components/ui/Badge";
 import InputField, { SelectField } from "../../components/ui/InputField";
 import Modal from "../../components/ui/Modal";
 import Tabs from "../../components/ui/Tabs";
+import JalaliDateSelect from "../../components/ui/JalaliDateSelect";
 import {
   IconCheck,
   IconClock,
@@ -132,7 +133,7 @@ export default function DoctorProfile() {
   useEffect(() => {
     const fetchDefs = async () => {
       try {
-        const types = ["prefix", "city"];
+        const types = ["prefix", "city", "insurance_type", "supplementary_insurance"];
         const results = await Promise.all(
           types.map(async (t) => {
             const data = await api.get<{ id: string; name: string }[]>(
@@ -149,20 +150,7 @@ export default function DoctorProfile() {
     fetchDefs();
   }, []);
 
-  if (!me)
-    return (
-      <div className="p-10 text-center text-ink-500">در حال بارگذاری...</div>
-    );
-
-  const specialty = getSpecialty(me.specialtyId);
-
-  const [hours, setHours] = useState<WorkingHourSlot[]>(
-    me.workingHours.map((h) => ({
-      ...h,
-      breakMinutes: h.breakMinutes ?? 15,
-      appointmentDurationMinutes: h.appointmentDurationMinutes ?? 30,
-    })),
-  );
+  const [hours, setHours] = useState<WorkingHourSlot[]>([]);
   const daysOfWeek = [
     "شنبه",
     "یکشنبه",
@@ -232,22 +220,11 @@ export default function DoctorProfile() {
   };
 
   const [comm, setComm] = useState<CommState>({
-    chat: {
-      enabled: me.communication?.chat?.enabled ?? true,
-      fee: me.communication?.chat?.fee ?? defaultFee.chat,
-    },
-    audio: {
-      enabled: me.communication?.audio?.enabled ?? true,
-      fee: me.communication?.audio?.fee ?? defaultFee.audio,
-    },
-    video: {
-      enabled: me.communication?.video?.enabled ?? true,
-      fee: me.communication?.video?.fee ?? defaultFee.video,
-    },
+    chat: { enabled: true, fee: defaultFee.chat },
+    audio: { enabled: true, fee: defaultFee.audio },
+    video: { enabled: true, fee: defaultFee.video },
   });
-  const [chatAutoCloseMinutes, setChatAutoCloseMinutes] = useState(
-    me.communication?.chatAutoCloseMinutes ?? 1440,
-  );
+  const [chatAutoCloseMinutes, setChatAutoCloseMinutes] = useState(1440);
   const [commError, setCommError] = useState("");
 
   const toggleComm = (type: ConsultType) => {
@@ -269,20 +246,74 @@ export default function DoctorProfile() {
     setComm({ ...comm, [type]: { ...comm[type], fee: num } });
   };
 
-  const [name, setName] = useState(me.name);
-  const [prefix, setPrefix] = useState(me.prefix || "دکتر");
-  const [selectedSpecialty, setSelectedSpecialty] = useState(me.specialtyId);
-  const [city, setCity] = useState(me.city);
-  const [hospital, setHospital] = useState(me.hospital);
-  const [bio, setBio] = useState(me.bio);
+  const [name, setName] = useState("");
+  const [prefix, setPrefix] = useState("دکتر");
+  const [selectedSpecialty, setSelectedSpecialty] = useState("");
+  const [city, setCity] = useState("");
+  const [hospital, setHospital] = useState("");
+  const [bio, setBio] = useState("");
+  const [nationalId, setNationalId] = useState("");
+  const [gender, setGender] = useState("");
+  const [birthDate, setBirthDate] = useState("");
+  const [bloodType, setBloodType] = useState("");
+  const [insuranceType, setInsuranceType] = useState("");
+  const [supplementaryInsurance, setSupplementaryInsurance] = useState("");
 
-  const [cardNumber, setCardNumber] = useState(me.cardNumber || "");
-  const [accountNumber, setAccountNumber] = useState(me.accountNumber || "");
-  const [shaba, setShaba] = useState(me.shaba || "");
+  const [cardNumber, setCardNumber] = useState("");
+  const [accountNumber, setAccountNumber] = useState("");
+  const [shaba, setShaba] = useState("");
 
   const [withdrawOpen, setWithdrawOpen] = useState(false);
 
   const [activeTab, setActiveTab] = useState("profile");
+
+  useEffect(() => {
+    if (!me) return;
+    setHours(
+      me.workingHours.map((h) => ({
+        ...h,
+        breakMinutes: h.breakMinutes ?? 15,
+        appointmentDurationMinutes: h.appointmentDurationMinutes ?? 30,
+      })),
+    );
+    setComm({
+      chat: {
+        enabled: me.communication?.chat?.enabled ?? true,
+        fee: me.communication?.chat?.fee ?? defaultFee.chat,
+      },
+      audio: {
+        enabled: me.communication?.audio?.enabled ?? true,
+        fee: me.communication?.audio?.fee ?? defaultFee.audio,
+      },
+      video: {
+        enabled: me.communication?.video?.enabled ?? true,
+        fee: me.communication?.video?.fee ?? defaultFee.video,
+      },
+    });
+    setChatAutoCloseMinutes(me.communication?.chatAutoCloseMinutes ?? 1440);
+    setName(me.name);
+    setPrefix(me.prefix || "دکتر");
+    setSelectedSpecialty(me.specialtyId);
+    setCity(me.city);
+    setHospital(me.hospital);
+    setBio(me.bio);
+    setNationalId(me.nationalId || "");
+    setGender(me.gender || "");
+    setBirthDate(me.dateOfBirth || "");
+    setBloodType(me.bloodType || "");
+    setInsuranceType(me.insuranceType || "");
+    setSupplementaryInsurance(me.supplementaryInsurance || "");
+    setCardNumber(me.cardNumber || "");
+    setAccountNumber(me.accountNumber || "");
+    setShaba(me.shaba || "");
+  }, [me]);
+
+  if (!me)
+    return (
+      <div className="p-10 text-center text-ink-500">در حال بارگذاری...</div>
+    );
+
+  const specialty = getSpecialty(me.specialtyId);
 
   const profileTabs = [
     { key: "profile", label: "پروفایل حرفه‌ای" },
@@ -305,6 +336,12 @@ export default function DoctorProfile() {
           cardNumber,
           accountNumber,
           shaba,
+          nationalId,
+          gender,
+          dateOfBirth: birthDate || null,
+          bloodType,
+          insuranceType,
+          supplementaryInsurance,
         }),
         api.put("/doctors/me/communication/", {
           chat: comm.chat,
@@ -483,6 +520,18 @@ export default function DoctorProfile() {
             bio={bio}
             setBio={setBio}
             defOptions={defOptions}
+            nationalId={nationalId}
+            setNationalId={setNationalId}
+            gender={gender}
+            setGender={setGender}
+            birthDate={birthDate}
+            setBirthDate={setBirthDate}
+            bloodType={bloodType}
+            setBloodType={setBloodType}
+            insuranceType={insuranceType}
+            setInsuranceType={setInsuranceType}
+            supplementaryInsurance={supplementaryInsurance}
+            setSupplementaryInsurance={setSupplementaryInsurance}
           />
         )}
         {activeTab === "payment" && (
@@ -584,6 +633,8 @@ export default function DoctorProfile() {
 }
 
 // Tab components
+const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+
 function ProfileTab({
   me,
   name,
@@ -599,6 +650,18 @@ function ProfileTab({
   bio,
   setBio,
   defOptions,
+  nationalId,
+  setNationalId,
+  gender,
+  setGender,
+  birthDate,
+  setBirthDate,
+  bloodType,
+  setBloodType,
+  insuranceType,
+  setInsuranceType,
+  supplementaryInsurance,
+  setSupplementaryInsurance,
 }: {
   me: (typeof doctors)[0];
   name: string;
@@ -614,6 +677,18 @@ function ProfileTab({
   bio: string;
   setBio: (v: string) => void;
   defOptions: Record<string, { id: string; name: string }[]>;
+  nationalId: string;
+  setNationalId: (v: string) => void;
+  gender: string;
+  setGender: (v: string) => void;
+  birthDate: string;
+  setBirthDate: (v: string) => void;
+  bloodType: string;
+  setBloodType: (v: string) => void;
+  insuranceType: string;
+  setInsuranceType: (v: string) => void;
+  supplementaryInsurance: string;
+  setSupplementaryInsurance: (v: string) => void;
 }) {
   return (
     <div className="space-y-6 mt-4">
@@ -634,6 +709,72 @@ function ProfileTab({
           name="phone"
           readOnly
         />
+        <InputField
+          label="کد ملی"
+          name="nationalId"
+          dir="ltr"
+          className="text-right"
+          inputMode="numeric"
+          maxLength={10}
+          value={nationalId}
+          onChange={(e) =>
+            setNationalId(e.target.value.replace(/[^\d]/g, "").slice(0, 10))
+          }
+        />
+        <SelectField
+          label="جنسیت"
+          value={gender}
+          onChange={(e) => setGender(e.target.value)}
+          name="gender"
+        >
+          <option value="">انتخاب کنید</option>
+          <option value="male">مرد</option>
+          <option value="female">زن</option>
+        </SelectField>
+        <JalaliDateSelect
+          label="تاریخ تولد (شمسی)"
+          value={birthDate}
+          onChange={setBirthDate}
+        />
+        <SelectField
+          label="گروه خونی"
+          value={bloodType}
+          onChange={(e) => setBloodType(e.target.value)}
+          name="bloodType"
+        >
+          <option value="">انتخاب کنید</option>
+          {bloodTypes.map((b) => (
+            <option key={b} value={b}>
+              {b}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField
+          label="بیمه پایه"
+          value={insuranceType}
+          onChange={(e) => setInsuranceType(e.target.value)}
+          name="insuranceType"
+        >
+          <option value="">انتخاب کنید</option>
+          {(defOptions.insurance_type || []).map((d) => (
+            <option key={d.id} value={d.name}>
+              {d.name}
+            </option>
+          ))}
+        </SelectField>
+        <SelectField
+          label="بیمه تکمیلی"
+          value={supplementaryInsurance}
+          onChange={(e) => setSupplementaryInsurance(e.target.value)}
+          name="supplementaryInsurance"
+        >
+          <option value="">ندارد</option>
+          {(defOptions.supplementary_insurance || []).map((d) => (
+            <option key={d.id} value={d.name}>
+              {d.name}
+            </option>
+          ))}
+        </SelectField>
         <SelectField
           label="پیشوند"
           value={prefix}
@@ -863,9 +1004,9 @@ function HoursTab({
                   {slotIdxs.map((idx) => (
                     <div
                       key={idx}
-                      className="flex-[1_1_calc(50%-0.5rem)] md:flex-[1_1_calc(50%-0.5rem)] min-w-[200px] max-w-full md:max-w-[calc(50%-0.5rem)] rounded-xl border border-primary-500 bg-white/40 p-2.5"
+                      className="flex-[1_1_calc(50%-0.5rem)] md:flex-[1_1_calc(50%-0.5rem)] min-w-[200px] max-w-full md:max-w-[calc(50%-0.5rem)] rounded-xl border border-primary-200 bg-white/40 p-2.5"
                     >
-                      <div className="flex items-center gap-2 bg-primary-200 rounded-2xl px-2">
+                      <div className="flex items-center gap-2 bg-primary-100 rounded-2xl px-2">
                         <span className="text-xs text-ink-400">از</span>
                         <input
                           type="time"
@@ -892,7 +1033,7 @@ function HoursTab({
                         </button>
                       </div>
                       <div className="mt-1.5 flex items-center gap-4 pr-1 flex-wrap">
-                        <div className="flex items-center gap-2 bg-primary-200 rounded-2xl px-2 py-1">
+                        <div className="flex items-center gap-2 bg-primary-100 rounded-2xl px-2 py-1">
                           <span className="text-[11px] text-ink-400">
                             استراحت:
                           </span>
@@ -915,7 +1056,7 @@ function HoursTab({
                             دقیقه
                           </span>
                         </div>
-                        <div className="flex items-center gap-2 bg-primary-200 rounded-2xl px-2 py-1">
+                        <div className="flex items-center gap-2 bg-primary-100 rounded-2xl px-2 py-1">
                           <span className="text-[11px] text-ink-400">
                             مدت ویزیت:
                           </span>
@@ -1045,8 +1186,23 @@ function CommTab({
                   <input
                     type="text"
                     inputMode="numeric"
-                    value={toFa(comm[type].fee.toLocaleString("en-US"))}
-                    onChange={(e) => setCommFee(type, e.target.value)}
+                    value={comm[type].fee.toString()}
+                    onChange={(e) => {
+                      // Remove non-digit characters
+                      const rawValue = e.target.value.replace(/,/g, "");
+                      // Only allow numbers
+                      if (rawValue === "" || /^\d+$/.test(rawValue)) {
+                        setCommFee(type, rawValue);
+                      }
+                    }}
+                    onBlur={(e) => {
+                      // Format with commas when user leaves the field
+                      const value = comm[type].fee;
+                      if (value && !isNaN(value)) {
+                        // Update display with formatted value if needed
+                        e.target.value = Number(value).toLocaleString("en-US");
+                      }
+                    }}
                     className="glass-input w-full rounded-xl py-2 pr-3 pl-16 text-left text-sm tabular text-ink-800 outline-none transition focus:border-primary-300 focus:ring-2 focus:ring-primary-200"
                   />
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-ink-400">
@@ -1106,7 +1262,7 @@ function SlotAdder({
   const [from, setFrom] = useState("08:00");
   const [to, setTo] = useState("10:00");
   return (
-    <div className="flex items-center gap-2 border-t border-primary-300 bg-primary-200 px-3 py-2">
+    <div className="flex items-center gap-2 border-t border-primary-200 bg-primary-100 px-3 py-2">
       <div className="flex flex-row gap-1 items-center max-w-[800px]">
         <input
           type="time"

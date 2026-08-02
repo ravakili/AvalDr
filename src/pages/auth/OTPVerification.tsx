@@ -27,6 +27,7 @@ export default function OTPVerification() {
   const [code, setCode] = useState("");
   const [error, setError] = useState("");
   const timerRef = useRef<ReturnType<typeof setInterval>>();
+  const verifiedRef = useRef(false);
 
   useEffect(() => {
     if (!otpSent) {
@@ -52,10 +53,12 @@ export default function OTPVerification() {
   }, [decrementTimer]);
 
   const handleVerify = useCallback(async () => {
-    if (code.length !== 6 || isLoading) return;
+    if (code.length !== 6 || isLoading || verifiedRef.current) return;
+    verifiedRef.current = true;
     setError("");
     const result = await verifyOTP(code);
     if (!result.success) {
+      verifiedRef.current = false;
       setError("کد وارد شده اشتباه است");
       return;
     }
@@ -80,6 +83,7 @@ export default function OTPVerification() {
     if (!canResend()) return;
     resetTimer();
     incrementResend();
+    verifiedRef.current = false;
     setCode("");
     setError("");
     await sendOTP(phone);
@@ -124,6 +128,7 @@ export default function OTPVerification() {
               onChange={(val) => {
                 setCode(val);
                 setError("");
+                verifiedRef.current = false;
               }}
               error={error}
               disabled={isLoading}

@@ -44,6 +44,7 @@ interface AuthState {
 
 const defaultUserData: UserData = {
   name: "",
+  nationalId: "",
   dateOfBirth: "",
   gender: "male",
   bloodType: "",
@@ -142,6 +143,10 @@ export const useAuthStore = create<AuthState>()(
             user: response.isNewUser ? null : response.user,
             isLoading: false,
             isNewUser: response.isNewUser,
+            otpCode: "",
+            otpSent: false,
+            otpTimer: 0,
+            resendCount: 0,
           });
           return {
             success: true,

@@ -42,7 +42,27 @@ async function parseResponse(response: Response) {
   return response.text()
 }
 
-async function refreshAccessToken() {
+export const AUTH_EXPIRED_EVENT = 'avaldr:auth-expired'
+
+function notifyAuthExpired() {
+  try {
+    window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT))
+  } catch {
+    // no-op
+  }
+}
+
+let refreshInFlight: Promise<string | null> | null = null
+
+function refreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight
+  refreshInFlight = doRefresh().finally(() => {
+    refreshInFlight = null
+  })
+  return refreshInFlight
+}
+
+async function doRefresh(): Promise<string | null> {
   const tokens = getApiTokens()
   if (!tokens?.refresh) return null
   const response = await fetch(`${API_BASE}/auth/refresh/`, {
@@ -52,6 +72,7 @@ async function refreshAccessToken() {
   })
   if (!response.ok) {
     setApiTokens(null)
+    notifyAuthExpired()
     return null
   }
   const data = await response.json()
