@@ -1,13 +1,14 @@
 from django.shortcuts import get_object_or_404
 from rest_framework import status, viewsets
+from rest_framework.decorators import action
 from rest_framework.response import Response
 
 from appointments.models import Appointment
 from config.permissions import IsActiveUser
-from notifications.services import notify
+from notifications.services import notify, notify_admins
 
-from .models import ChatMessage
-from .serializers import ChatMessageSerializer
+from .models import ChatMessage, SupportMessage, SupportThread
+from .serializers import ChatMessageSerializer, SupportMessageSerializer, SupportThreadSerializer
 
 
 def appointment_for_user(user, appointment_id):
@@ -86,3 +87,75 @@ class ChatRoomViewSet(viewsets.GenericViewSet):
                 'lastMessage': last_message.text if last_message else '',
             })
         return Response(data)
+
+
+class SupportThreadViewSet(viewsets.GenericViewSet):
+    permission_classes = (IsActiveUser,)
+    serializer_class = SupportThreadSerializer
+
+    def get_queryset(self):
+        user = self.request.user
+        if user.role == 'admin':
+            return SupportThread.objects.select_related('participant')
+        return SupportThread.objects.select_related('participant').filter(participant=user)
+
+    def list(self, request):
+        threads = self.get_queryset().prefetch_related('messages')
+        return Response(
+            SupportThreadSerializer(threads, many=True, context={'request': request}).data
+        )
+
+    def create(self, request):
+        thread, _ = SupportThread.objects.get_or_create(participant=request.user)
+        return Response(
+            SupportThreadSerializer(thread, context={'request': request}).data,
+            status=status.HTTP_201_CREATED if _ else status.HTTP_200_OK,
+        )
+
+    def _get_accessible(self, request, pk):
+        thread = get_object_or_404(SupportThread, pk=pk)
+        if request.user.role != 'admin' and thread.participant_id != request.user.pk:
+            return None
+        return thread
+
+    @action(detail=True, methods=('get',))
+    def messages(self, request, pk=None):
+        thread = self._get_accessible(request, pk)
+        if not thread:
+            return Response({'detail': 'دسترسی به این گفتگو مجاز نیست.'}, status=403)
+        return Response(
+            SupportMessageSerializer(
+                thread.messages.all(), many=True, context={'request': request}
+            ).data
+        )
+
+    @action(detail=True, methods=('post',))
+    def send(self, request, pk=None):
+        thread = self._get_accessible(request, pk)
+        if not thread:
+            return Response({'detail': 'دسترسی به این گفتگو مجاز نیست.'}, status=403)
+        text = (request.data.get('text') or '').strip()
+        if not text:
+            return Response({'detail': 'متن پیام الزامی است.'}, status=400)
+        message = SupportMessage.objects.create(
+            thread=thread, sender=request.user, text=text
+        )
+        if request.user.role == 'admin':
+            notify(
+                thread.participant,
+                'پیام جدید از پشتیبانی',
+                text[:160],
+                'message',
+                {'supportThreadId': str(thread.pk)},
+            )
+        else:
+            notify_admins(
+                'پیام جدید پشتیبانی',
+                f'{request.user.display_name}: {text[:160]}',
+                'message',
+                {'supportThreadId': str(thread.pk)},
+            )
+        return Response(
+            SupportMessageSerializer(message, context={'request': request}).data,
+            status=status.HTTP_201_CREATED,
+        )

@@ -24,3 +24,41 @@ class ChatMessage(models.Model):
 
     def __str__(self):
         return f'{self.sender} -> {self.appointment}: {self.message_type}'
+
+
+class SupportThread(models.Model):
+    participant = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='support_threads',
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'support_threads'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'Support: {self.participant}'
+
+
+class SupportMessage(models.Model):
+    thread = models.ForeignKey(
+        SupportThread,
+        on_delete=models.CASCADE,
+        related_name='messages',
+    )
+    sender = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='support_messages',
+    )
+    text = models.TextField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'support_messages'
+        ordering = ['created_at']
+
+    def __str__(self):
+        return f'{self.sender} -> support thread {self.thread_id}: {self.text[:40]}'

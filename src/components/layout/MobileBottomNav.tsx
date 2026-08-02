@@ -27,7 +27,7 @@ export default function MobileBottomNav({ role }: Props) {
               'flex flex-1 flex-col items-center gap-1 rounded-full py-2 text-[10px] font-medium transition-all',
               isActive
                 ? 'bg-primary-500 text-white shadow-glass-sm'
-                : 'text-ink-900 hover:bg-white/60 dark:text-ink-400',
+                : 'text-ink-900  dark:text-ink-200',
             )
           }
         >

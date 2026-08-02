@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import GlassCard from "../../components/ui/GlassCard";
 import PrimaryButton from "../../components/ui/PrimaryButton";
@@ -6,6 +6,7 @@ import Avatar from "../../components/ui/Avatar";
 import { StatusBadge } from "../../components/ui/Badge";
 import StatCard from "../../components/ui/StatCard";
 import Countdown from "../../components/ui/Countdown";
+import Modal from "../../components/ui/Modal";
 import {
   IconActivity,
   IconCalendar,
@@ -19,15 +20,17 @@ import {
   IconPrescription,
   IconSearch,
   IconVideo,
+  IconView,
 } from "../../components/ui/icons";
 import { formatDateFa, relativeDay, shortDateFa, toFa } from "../../lib/utils";
 import { useAuthStore } from "../../store/authStore";
 import { useUserStore } from "../../store/userStore";
 import { doctorName, getDoctor, prescriptions } from "../../data/apiData";
-import type { Appointment } from "../../types";
+import type { Appointment, Prescription } from "../../types";
 
 export default function UserHome() {
   const navigate = useNavigate();
+  const [selectedRx, setSelectedRx] = useState<Prescription | null>(null);
   const user = useAuthStore((s) => s.user);
   const profile = useUserStore((s) => s.profile);
   const appointments = useUserStore((s) => s.appointments);
@@ -127,8 +130,8 @@ export default function UserHome() {
               </PrimaryButton>
             </Link>
             <Link to="/user/appointments">
-              <PrimaryButton size="lg" variant="ghost" icon={<IconPlus />}>
-                نوبت جدید
+              <PrimaryButton size="lg" variant="ghost" icon={<IconView />}>
+                نوبت‌های من
               </PrimaryButton>
             </Link>
           </div>
@@ -147,7 +150,7 @@ export default function UserHome() {
             <div>
               <p className="text-xs text-ink-400">شمارش معکوس تا نوبت بعدی</p>
               <p className="font-bold text-ink-800">
-                {doctorName(getDoctor(nextAppt.doctorId))} •{" "}
+                {doctorName(getDoctor(nextAppt.doctorId))} -{" "}
                 <span className="tabular">{toFa(nextAppt.time)}</span>
               </p>
               <p className="text-xs text-ink-500">
@@ -322,7 +325,8 @@ export default function UserHome() {
                 return (
                   <div
                     key={rx.id}
-                    className="rounded-2xl border border-white/50 bg-white/40 p-3 transition hover:bg-white/60"
+                    onClick={() => setSelectedRx(rx)}
+                    className="rounded-2xl border border-white/50 bg-white/40 p-3 transition hover:bg-white/60 hover:cursor-pointer"
                   >
                     <div className="flex items-center justify-between mb-1">
                       <p className="text-xs font-semibold text-ink-700">
@@ -431,6 +435,70 @@ export default function UserHome() {
           ))}
         </div>
       </div>
+
+      <Modal
+        open={!!selectedRx}
+        onClose={() => setSelectedRx(null)}
+        title="جزئیات نسخه"
+      >
+        {selectedRx && (
+          <div className="space-y-4">
+            <div className="flex items-center justify-between rounded-2xl border border-white/50 bg-white/40 p-4">
+              <div className="flex items-center gap-3">
+                <Avatar src={getDoctor(selectedRx.doctorId)?.avatar} size="md" ring />
+                <div>
+                  <p className="text-sm font-bold text-ink-800">
+                    {doctorName(getDoctor(selectedRx.doctorId)) || "پزشک"}
+                  </p>
+                  <p className="text-xs text-ink-400">
+                    {formatDateFa(selectedRx.createdAt.slice(0, 10))}
+                  </p>
+                </div>
+              </div>
+              <div className="grid h-10 w-10 place-items-center rounded-xl bg-primary-50 text-primary-500">
+                <IconPrescription className="h-5 w-5" />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {selectedRx.items.map((item, i) => (
+                <div
+                  key={i}
+                  className="rounded-2xl border border-white/50 bg-white/40 p-4"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <p className="text-sm font-semibold text-ink-800">
+                      💊 {item.drug}
+                    </p>
+                    {item.dosage && (
+                      <span className="rounded-full bg-primary-50 px-2.5 py-0.5 text-[10px] font-medium text-primary-700">
+                        {item.dosage}
+                      </span>
+                    )}
+                  </div>
+                  <p className="mt-1 text-xs text-ink-600">{item.usage}</p>
+                  {item.duration && (
+                    <p className="mt-1 text-xs text-ink-400">
+                      مدت مصرف: {item.duration}
+                    </p>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            {selectedRx.notes && (
+              <div className="rounded-2xl border border-amber-200/70 bg-amber-50/60 p-4">
+                <p className="text-xs font-semibold text-amber-700">
+                  دستورات پزشک
+                </p>
+                <p className="mt-1 text-xs leading-6 text-amber-800">
+                  {selectedRx.notes}
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }

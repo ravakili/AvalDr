@@ -1,6 +1,7 @@
 import csv
 import io
 
+from django.db.models import Count
 from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import status, viewsets
@@ -13,8 +14,14 @@ from appointments.models import Appointment
 from config.permissions import IsPlatformAdmin
 from config.serializers import EmptySerializer
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
-from doctors.models import DoctorProfile
-from doctors.serializers import DoctorSerializer
+from doctors.models import CommunicationSetting, DoctorDocument, DoctorProfile
+from doctors.serializers import (
+    CommunicationSettingSerializer,
+    DoctorDocumentSerializer,
+    DoctorProfileUpdateSerializer,
+    DoctorSerializer,
+    WorkingHourSerializer,
+)
 from medical.models import MedicalRecord
 from medical.serializers import MedicalRecordSerializer
 from payments.models import Payment
@@ -164,6 +171,28 @@ class UserManageViewSet(viewsets.ReadOnlyModelViewSet):
         data['medicalHistory'] = MedicalRecordSerializer(record).data
         return Response(data)
 
+    def partial_update(self, request, *args, **kwargs):
+        user = self.get_object()
+        profile, _ = PatientProfile.objects.get_or_create(
+            user=user, defaults={'full_name': user.display_name}
+        )
+        serializer = PatientProfileSerializer(profile, data=request.data, partial=True)
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        record, _ = MedicalRecord.objects.get_or_create(patient=user)
+        updated = False
+        if 'allergies' in request.data:
+            record.allergies = request.data.get('allergies', [])
+            updated = True
+        if 'chronicConditions' in request.data:
+            record.diagnoses = request.data.get('chronicConditions', [])
+            updated = True
+        if updated:
+            record.save()
+        data = serializer.data
+        data['medicalHistory'] = MedicalRecordSerializer(record).data
+        return Response(data)
+
     @action(detail=True, methods=('post',))
     def suspend(self, request, pk=None):
         user = self.get_object()
@@ -201,6 +230,7 @@ class DoctorManageViewSet(viewsets.ReadOnlyModelViewSet):
     serializer_class = DoctorSerializer
     permission_classes = (IsPlatformAdmin,)
     pagination_class = None
+    parser_classes = (JSONParser, MultiPartParser, FormParser)
 
     def get_queryset(self):
         queryset = DoctorProfile.objects.select_related('user', 'specialty').prefetch_related(
@@ -208,6 +238,64 @@ class DoctorManageViewSet(viewsets.ReadOnlyModelViewSet):
         )
         status_filter = self.request.query_params.get('status')
         return queryset.filter(status=status_filter) if status_filter else queryset
+
+    def _json_value(self, data, key):
+        value = data.get(key)
+        if isinstance(value, str):
+            import json
+
+            try:
+                return json.loads(value)
+            except (TypeError, ValueError):
+                return None
+        return value
+
+    def partial_update(self, request, *args, **kwargs):
+        doctor = self.get_object()
+        data = request.data.copy()
+
+        communication = self._json_value(data, 'communication')
+        if isinstance(communication, dict):
+            settings_obj, _ = CommunicationSetting.objects.get_or_create(doctor=doctor)
+            comm_serializer = CommunicationSettingSerializer(
+                settings_obj, data=communication, partial=True
+            )
+            comm_serializer.is_valid(raise_exception=True)
+            comm_serializer.save()
+
+        working_hours = self._json_value(data, 'workingHours')
+        if working_hours is not None:
+            doctor.working_hours.all().delete()
+            wh_serializer = WorkingHourSerializer(
+                data=working_hours, many=True, context={'doctor': doctor}
+            )
+            wh_serializer.is_valid(raise_exception=True)
+            wh_serializer.save(doctor=doctor)
+
+        serializer = DoctorProfileUpdateSerializer(
+            doctor, data=data, partial=True
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(
+            DoctorSerializer(doctor, context={'request': request}).data
+        )
+
+    @action(detail=True, methods=('get', 'post', 'delete'), url_path='documents')
+    def documents(self, request, pk=None):
+        doctor = self.get_object()
+        if request.method == 'POST':
+            serializer = DoctorDocumentSerializer(data=request.data)
+            serializer.is_valid(raise_exception=True)
+            document = serializer.save(doctor=doctor)
+            return Response(DoctorDocumentSerializer(document).data, status=201)
+        if request.method == 'DELETE':
+            doc_id = request.data.get('id') or request.query_params.get('id')
+            if not doc_id:
+                return Response({'detail': 'شناسه مدرک الزامی است.'}, status=400)
+            DoctorDocument.objects.filter(pk=doc_id, doctor=doctor).delete()
+            return Response(status=204)
+        return Response(DoctorDocumentSerializer(doctor.documents.all(), many=True).data)
 
     @action(detail=True, methods=('post',))
     def status(self, request, pk=None):
@@ -289,6 +377,29 @@ class AdminDashboardView(viewsets.GenericViewSet):
 
     def list(self, request):
         successful_payments = Payment.objects.filter(status='success')
+
+        today = timezone.localdate()
+        trend_days = 7
+        day_names = (
+            'شنبه', 'یکشنبه', 'دوشنبه', 'سه‌شنبه', 'چهارشنبه', 'پنجشنبه', 'جمعه',
+        )
+        start = today - timezone.timedelta(days=trend_days - 1)
+        counts = {
+            row['date']: row['count']
+            for row in Appointment.objects.filter(
+                created_at__date__gte=start,
+                created_at__date__lte=today,
+            ).values('date').annotate(count=Count('id')).values('date', 'count')
+        }
+        appointment_trend = [
+            {
+                'date': (start + timezone.timedelta(days=offset)).isoformat(),
+                'day': day_names[(start + timezone.timedelta(days=offset)).weekday()],
+                'count': counts.get(start + timezone.timedelta(days=offset), 0),
+            }
+            for offset in range(trend_days)
+        ]
+
         return Response({
             'totalUsers': User.objects.filter(role='user').count(),
             'totalDoctors': DoctorProfile.objects.count(),
@@ -298,6 +409,7 @@ class AdminDashboardView(viewsets.GenericViewSet):
             'completedAppointments': Appointment.objects.filter(status='completed').count(),
             'pendingWithdrawals': WithdrawalRequest.objects.filter(status='pending').count(),
             'revenue': sum(successful_payments.values_list('amount', flat=True)),
+            'appointmentTrend': appointment_trend,
         })
 
 

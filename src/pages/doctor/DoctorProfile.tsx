@@ -125,20 +125,26 @@ export default function DoctorProfile() {
     setAvatarSrc(me?.avatar);
   }, [me?.avatar]);
 
-  const [defOptions, setDefOptions] = useState<Record<string, { id: string; name: string }[]>>({});
+  const [defOptions, setDefOptions] = useState<
+    Record<string, { id: string; name: string }[]>
+  >({});
 
   useEffect(() => {
     const fetchDefs = async () => {
       try {
-        const types = ['prefix', 'city'];
+        const types = ["prefix", "city"];
         const results = await Promise.all(
           types.map(async (t) => {
-            const data = await api.get<{ id: string; name: string }[]>(`/common/definitions/?type=${t}`);
+            const data = await api.get<{ id: string; name: string }[]>(
+              `/common/definitions/?type=${t}`,
+            );
             return [t, data] as [string, { id: string; name: string }[]];
-          })
+          }),
         );
         setDefOptions(Object.fromEntries(results));
-      } catch { /* ignore */ }
+      } catch {
+        /* ignore */
+      }
     };
     fetchDefs();
   }, []);
@@ -311,7 +317,10 @@ export default function DoctorProfile() {
       await refreshBackendData("doctor");
       toast.success("اطلاعات پزشک ذخیره شد");
     } catch (e) {
-      toast.error("خطا در ذخیره اطلاعات", e instanceof Error ? e.message : undefined);
+      toast.error(
+        "خطا در ذخیره اطلاعات",
+        e instanceof Error ? e.message : undefined,
+      );
     } finally {
       setSaving(false);
     }
@@ -391,7 +400,9 @@ export default function DoctorProfile() {
             accept="image/*"
             onChange={handleAvatarChange}
           />
-          <h2 className="mt-4 text-lg font-bold text-ink-800">{me.prefix || 'دکتر'} {me.name}</h2>
+          <h2 className="mt-4 text-lg font-bold text-ink-800">
+            {me.prefix || "دکتر"} {me.name}
+          </h2>
           <p className="text-sm text-primary-600">
             {specialty?.icon} {specialty?.name}
           </p>
@@ -630,7 +641,9 @@ function ProfileTab({
           name="prefix"
         >
           {(defOptions.prefix || []).map((p) => (
-            <option key={p.id} value={p.name}>{p.name}</option>
+            <option key={p.id} value={p.name}>
+              {p.name}
+            </option>
           ))}
         </SelectField>
         <SelectField
@@ -652,7 +665,11 @@ function ProfileTab({
           name="city"
         >
           <option value="">انتخاب کنید</option>
-          {(defOptions.city || []).map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+          {(defOptions.city || []).map((c) => (
+            <option key={c.id} value={c.name}>
+              {c.name}
+            </option>
+          ))}
         </SelectField>
         <InputField
           label="بیمارستان / مطب"
@@ -756,7 +773,7 @@ function HoursTab({
 
   const toggleDay = (day: string) =>
     setSelectedDays((prev) =>
-      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day]
+      prev.includes(day) ? prev.filter((d) => d !== day) : [...prev, day],
     );
 
   const addBulk = () => {
@@ -777,7 +794,7 @@ function HoursTab({
       {/* Bulk add section */}
       <div className="rounded-2xl border border-primary-200 bg-primary-50/40 p-4">
         <p className="mb-3 text-sm font-medium text-ink-700">
-          افزودن بازه به چند روز simultaneously
+          افزودن بازه به چند روز
         </p>
         <div className="mb-3 flex flex-wrap gap-2">
           {daysOfWeek.map((day) => (
@@ -842,13 +859,13 @@ function HoursTab({
               </div>
 
               {slotIdxs.length > 0 && (
-                <div className="space-y-1.5 p-3">
+                <div className="flex flex-wrap gap-2 p-3">
                   {slotIdxs.map((idx) => (
                     <div
                       key={idx}
-                      className="rounded-xl border border-white/50 bg-white/40 p-2.5"
+                      className="flex-[1_1_calc(50%-0.5rem)] md:flex-[1_1_calc(50%-0.5rem)] min-w-[200px] max-w-full md:max-w-[calc(50%-0.5rem)] rounded-xl border border-primary-500 bg-white/40 p-2.5"
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 bg-primary-200 rounded-2xl px-2">
                         <span className="text-xs text-ink-400">از</span>
                         <input
                           type="time"
@@ -875,7 +892,7 @@ function HoursTab({
                         </button>
                       </div>
                       <div className="mt-1.5 flex items-center gap-4 pr-1 flex-wrap">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 bg-primary-200 rounded-2xl px-2 py-1">
                           <span className="text-[11px] text-ink-400">
                             استراحت:
                           </span>
@@ -889,14 +906,16 @@ function HoursTab({
                             className="rounded-lg border border-white/50 bg-white/50 px-2 py-1 text-xs tabular text-ink-700 outline-none"
                           >
                             {BREAK_OPTIONS.map((v) => (
-                              <option key={v} value={v}>{v}</option>
+                              <option key={v} value={v}>
+                                {v}
+                              </option>
                             ))}
                           </select>
                           <span className="text-[11px] text-ink-400">
                             دقیقه
                           </span>
                         </div>
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 bg-primary-200 rounded-2xl px-2 py-1">
                           <span className="text-[11px] text-ink-400">
                             مدت ویزیت:
                           </span>
@@ -904,13 +923,17 @@ function HoursTab({
                             value={hours[idx].appointmentDurationMinutes ?? 30}
                             onChange={(e) =>
                               updateSlot(idx, {
-                                appointmentDurationMinutes: Number(e.target.value),
+                                appointmentDurationMinutes: Number(
+                                  e.target.value,
+                                ),
                               })
                             }
                             className="rounded-lg border border-white/50 bg-white/50 px-2 py-1 text-xs tabular text-ink-700 outline-none"
                           >
                             {DURATION_OPTIONS.map((v) => (
-                              <option key={v} value={v}>{v}</option>
+                              <option key={v} value={v}>
+                                {v}
+                              </option>
                             ))}
                           </select>
                           <span className="text-[11px] text-ink-400">
@@ -1083,30 +1106,32 @@ function SlotAdder({
   const [from, setFrom] = useState("08:00");
   const [to, setTo] = useState("10:00");
   return (
-    <div className="flex items-center gap-2 border-t border-white/30 px-3 py-2">
-      <input
-        type="time"
-        value={from}
-        onChange={(e) => setFrom(e.target.value)}
-        className="min-w-[80px] flex-1 rounded-lg border border-white/50 bg-white/50 px-2 py-1.5 text-sm tabular text-ink-700 outline-none"
-      />
-      <span className="text-xs text-ink-400">تا</span>
-      <input
-        type="time"
-        value={to}
-        onChange={(e) => setTo(e.target.value)}
-        className="min-w-[80px] flex-1 rounded-lg border border-white/50 bg-white/50 px-2 py-1.5 text-sm tabular text-ink-700 outline-none"
-      />
-      <button
-        onClick={() => {
-          if (from >= to) return;
-          onAdd(day, from, to);
-        }}
-        className="flex items-center gap-1 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-600 active:scale-[.97]"
-      >
-        <IconPlus className="h-3.5 w-3.5" />
-        افزودن بازه
-      </button>
+    <div className="flex items-center gap-2 border-t border-primary-300 bg-primary-200 px-3 py-2">
+      <div className="flex flex-row gap-1 items-center max-w-[800px]">
+        <input
+          type="time"
+          value={from}
+          onChange={(e) => setFrom(e.target.value)}
+          className="min-w-[80px] flex-1 rounded-lg border border-white/50 bg-white/50 px-2 py-1.5 text-sm tabular text-ink-700 outline-none"
+        />
+        <span className="text-xs text-ink-400">تا</span>
+        <input
+          type="time"
+          value={to}
+          onChange={(e) => setTo(e.target.value)}
+          className="min-w-[80px] flex-1 rounded-lg border border-white/50 bg-white/50 px-2 py-1.5 text-sm tabular text-ink-700 outline-none"
+        />
+        <button
+          onClick={() => {
+            if (from >= to) return;
+            onAdd(day, from, to);
+          }}
+          className="flex items-center gap-1 rounded-lg bg-primary-500 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-primary-600 active:scale-[.97]"
+        >
+          <IconPlus className="h-3.5 w-3.5" />
+          افزودن بازه
+        </button>
+      </div>
     </div>
   );
 }

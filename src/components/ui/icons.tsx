@@ -1,4 +1,4 @@
-import { LuChevronLeft, LuChevronRight } from "react-icons/lu";
+import { LuChevronLeft, LuChevronRight, LuEye, LuView } from "react-icons/lu";
 
 /** Tiny inline icon set (stroke-based, currentColor). */
 type P = { className?: string };
@@ -150,6 +150,9 @@ export const IconChevron = ({ className }: P) => (
 );
 export const IconChevronRight = ({ className }: P) => (
   <LuChevronRight className="h-4 w-4" />
+);
+export const IconView = ({ className }: P) => (
+  <LuEye className="h-4 w-4" />
 );
 export const IconHeart = ({ className }: P) => (
   <svg {...base(className)}>

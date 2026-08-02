@@ -106,3 +106,46 @@ export const api = {
     apiRequest<T>(path, { method: 'PUT', body: JSON.stringify(body) }),
   delete: <T>(path: string) => apiRequest<T>(path, { method: 'DELETE' }),
 }
+
+function parseBody(raw: string): unknown {
+  try {
+    return JSON.parse(raw)
+  } catch {
+    return raw
+  }
+}
+
+// Real file upload with progress reporting (fetch has no upload-progress API).
+export function uploadFileWithProgress(
+  path: string,
+  formData: FormData,
+  onProgress: (percent: number) => void,
+): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const attempt = (access?: string) => {
+      const xhr = new XMLHttpRequest()
+      xhr.open('POST', `${API_BASE}${path}`)
+      if (access) xhr.setRequestHeader('Authorization', `Bearer ${access}`)
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) {
+          onProgress(Math.round((event.loaded / event.total) * 100))
+        }
+      }
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          resolve(xhr.response ? parseBody(xhr.response) : null)
+        } else if (xhr.status === 401) {
+          refreshAccessToken().then((next) => {
+            if (next) attempt(next)
+            else reject(new ApiError(401, undefined))
+          })
+        } else {
+          reject(new ApiError(xhr.status, xhr.response ? parseBody(xhr.response) : undefined))
+        }
+      }
+      xhr.onerror = () => reject(new Error('خطا در ارسال فایل'))
+      xhr.send(formData)
+    }
+    attempt(getApiTokens()?.access)
+  })
+}

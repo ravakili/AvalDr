@@ -66,9 +66,10 @@ export default function DocumentUploadModal({ open, onClose }: Props) {
       id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       name: file.name,
       size: file.size,
-      type: file.name.split('.').pop() || '',
-      status: 'pending',
+      type: file.name.split(".").pop() || "",
+      status: "pending",
       progress: 0,
+      file,
     }
     addUploadedDoc(field.key, item)
     setUploading((prev) => ({ ...prev, [item.id]: true }))

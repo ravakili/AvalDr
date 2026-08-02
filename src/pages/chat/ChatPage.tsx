@@ -46,6 +46,7 @@ import type {
   ChatMessage,
   Prescription,
   ConsultType,
+  SupportThread,
 } from "../../types";
 import { BiMessageRoundedDots, BiSupport } from "react-icons/bi";
 import { toast } from "../../store/toastStore";
@@ -56,17 +57,9 @@ function chatCounterpart(a: (typeof appointments)[0], isDoctor: boolean) {
   return getDoctor(a.doctorId);
 }
 
-/* ───────── admin conversation stub ───────── */
+/* ───────── admin conversation id ───────── */
 const ADMIN_CONVERSATION_ID = "__admin__";
-const adminMessages: ChatMessage[] = [
-  {
-    id: "admin-welcome",
-    senderId: "admin",
-    text: "سلام، به پشتیبانی اول دکتر خوش آمدید. چطور می‌توانم کمک کنم؟",
-    time: "۱۰:۰۰",
-    type: "text",
-  },
-];
+const SUPPORT_PREFIX = "support:";
 
 /* ───────── main component ───────── */
 export default function ChatPage() {
@@ -89,7 +82,18 @@ export default function ChatPage() {
       "",
   );
   const activeAppt = appointments.find((a) => a.id === activeId);
-  const isAdminChat = activeId === ADMIN_CONVERSATION_ID;
+  const supportId = activeId.startsWith(SUPPORT_PREFIX)
+    ? activeId.slice(SUPPORT_PREFIX.length)
+    : "";
+  const isAdminChat = activeId === ADMIN_CONVERSATION_ID || !!supportId;
+
+  /* ── support chat ── */
+  const [supportThreads, setSupportThreads] = useState<SupportThread[]>([]);
+  const [mySupportThreadId, setMySupportThreadId] = useState<string>("");
+  const supportThreadId = supportId || mySupportThreadId;
+  const supportThread = supportId
+    ? supportThreads.find((t) => t.id === supportId)
+    : undefined;
 
   /* ── messages ── */
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -126,7 +130,13 @@ export default function ChatPage() {
   const patient = activeAppt ? getPatient(activeAppt.patientId) : undefined;
   const doctor = activeAppt ? getDoctor(activeAppt.doctorId) : undefined;
   const counterpart = isAdminChat
-    ? { name: "پشتیبانی", avatar: "", phone: "" }
+    ? supportId
+      ? {
+          name: supportThread?.participantName || "کاربر",
+          avatar: supportThread?.participantAvatar || "",
+          phone: supportThread?.participantPhone || "",
+        }
+      : { name: "پشتیبانی", avatar: "", phone: "" }
     : isDoctor
       ? patient
       : doctor;
@@ -150,9 +160,44 @@ export default function ChatPage() {
 
   /* ── fetch messages + appointment status ── */
   useEffect(() => {
-    if (!activeId || isAdminChat) {
-      setMessages(isAdminChat ? adminMessages : []);
+    if (!activeId) {
+      setMessages([]);
       return;
+    }
+    if (isAdminChat) {
+      let active = true;
+      let threadId = supportThreadId;
+      const loadMessages = () => {
+        if (!threadId) return;
+        api
+          .get<ChatMessage[]>(`/chat/support/threads/${threadId}/messages/`)
+          .then((msgs) => {
+            if (active) setMessages(msgs);
+          })
+          .catch(() => {});
+      };
+      const init = async () => {
+        if (threadId) {
+          loadMessages();
+        } else if (activeId === ADMIN_CONVERSATION_ID) {
+          try {
+            const thread = await api.post<SupportThread>(
+              "/chat/support/threads/",
+            );
+            threadId = thread.id;
+            setMySupportThreadId(thread.id);
+            loadMessages();
+          } catch {
+            /* ignore */
+          }
+        }
+      };
+      init();
+      const interval = setInterval(loadMessages, 4000);
+      return () => {
+        active = false;
+        clearInterval(interval);
+      };
     }
     let active = true;
     const fetchMessages = () =>
@@ -184,7 +229,26 @@ export default function ChatPage() {
       clearInterval(msgInterval);
       clearInterval(statusInterval);
     };
-  }, [activeId, isAdminChat]);
+  }, [activeId, isAdminChat, supportThreadId]);
+
+  /* ── admin: poll support threads list ── */
+  useEffect(() => {
+    if (!isAdmin) return;
+    let active = true;
+    const loadThreads = () =>
+      api
+        .get<SupportThread[]>("/chat/support/threads/")
+        .then((data) => {
+          if (active) setSupportThreads(data);
+        })
+        .catch(() => {});
+    loadThreads();
+    const interval = setInterval(loadThreads, 8000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [isAdmin]);
 
   /* ── auto‑close logic ── */
   const [closeCountdown, setCloseCountdown] = useState<string | null>(null);
@@ -261,17 +325,17 @@ export default function ChatPage() {
     const text = draft.trim();
     if (!text || chatClosed) return;
     if (isAdminChat) {
-      setMessages((prev) => [
-        ...prev,
-        {
-          id: `msg-${Date.now()}`,
-          senderId: ME,
-          text,
-          time: shortDateFa(new Date().toISOString()),
-          type: "text",
-        },
-      ]);
-      setDraft("");
+      if (!supportThreadId) return;
+      try {
+        const msg = await api.post<ChatMessage>(
+          `/chat/support/threads/${supportThreadId}/send/`,
+          { text },
+        );
+        setMessages((prev) => [...prev, msg]);
+        setDraft("");
+      } catch {
+        /* ignore */
+      }
       return;
     }
     try {
@@ -284,7 +348,7 @@ export default function ChatPage() {
     } catch {
       /* ignore */
     }
-  }, [draft, chatClosed, isAdminChat, activeId, ME]);
+  }, [draft, chatClosed, isAdminChat, activeId, ME, supportThreadId]);
 
   /* ── submit prescription ── */
   const submitPrescription = async () => {
@@ -357,6 +421,7 @@ export default function ChatPage() {
         myAppointments={myAppointments}
         activeAppointments={activeAppointments}
         pastAppointments={pastAppointments}
+        supportThreads={supportThreads}
         activeId={activeId}
         isDoctor={isDoctor}
         isAdmin={isAdmin}
@@ -374,6 +439,7 @@ export default function ChatPage() {
           myAppointments={myAppointments}
           activeAppointments={activeAppointments}
           pastAppointments={pastAppointments}
+          supportThreads={supportThreads}
           activeId={activeId}
           isDoctor={isDoctor}
           isAdmin={isAdmin}
@@ -400,15 +466,40 @@ export default function ChatPage() {
             </button>
 
             {isAdminChat ? (
-              <div className="flex items-center gap-3">
-                <div className="grid h-10 w-10 place-items-center rounded-full bg-primary-100 text-primary-600">
-                  <BiSupport className="h-5 w-5" />
+              supportId ? (
+                <div className="flex items-center gap-3">
+                  <Avatar
+                    src={supportThread?.participantAvatar || ""}
+                    size="md"
+                    ring
+                  />
+                  <div>
+                    <h2 className="font-bold text-ink-800">
+                      {supportThread?.participantName || "کاربر"}
+                    </h2>
+                    <p className="text-[11px] text-ink-400">
+                      {supportThread?.participantRole === "doctor"
+                        ? "پزشک"
+                        : "بیمار"}
+                      {supportThread?.participantPhone
+                        ? ` • ${supportThread.participantPhone}`
+                        : ""}
+                    </p>
+                  </div>
                 </div>
-                <div>
-                  <h2 className="font-bold text-ink-800">پشتیبانی</h2>
-                  <p className="text-[11px] text-ink-400">پاسخگویی ۲۴ ساعته</p>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <div className="grid h-10 w-10 place-items-center rounded-full bg-primary-100 text-primary-600">
+                    <BiSupport className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <h2 className="font-bold text-ink-800">پشتیبانی</h2>
+                    <p className="text-[11px] text-ink-400">
+                      پاسخگویی ۲۴ ساعته
+                    </p>
+                  </div>
                 </div>
-              </div>
+              )
             ) : (
               <>
                 {isAdmin ? (
@@ -598,7 +689,9 @@ export default function ChatPage() {
             )}
             <div className="mx-auto w-fit rounded-full bg-white/50 px-3 py-1 text-[11px] text-ink-400">
               {isAdminChat
-                ? "گفتگو با پشتیبانی"
+                ? supportId
+                  ? `گفتگو با ${supportThread?.participantName || "کاربر"}`
+                  : "گفتگو با پشتیبانی"
                 : `جلسه مشاوره • ${activeAppt ? formatDateFa(activeAppt.date) : ""}`}
             </div>
             {messages.map((m) => {
@@ -638,7 +731,9 @@ export default function ChatPage() {
                       }
                       size="sm"
                     />
-                    {(senderIsAdmin || (isAdmin && !isAdminChat)) && (
+                    {(senderIsAdmin ||
+                      (isAdmin && !isAdminChat) ||
+                      (isAdminChat && !mine)) && (
                       <span className="absolute -bottom-1 left-1/2 -translate-x-1/2 rounded bg-ink-800 px-1 py-[1px] text-[8px] text-white whitespace-nowrap">
                         {senderIsAdmin
                           ? m.senderName || "ادمین"
@@ -1050,6 +1145,7 @@ function ChatList({
   myAppointments,
   activeAppointments,
   pastAppointments,
+  supportThreads,
   activeId,
   isDoctor,
   isAdmin,
@@ -1060,6 +1156,7 @@ function ChatList({
   myAppointments: typeof appointments;
   activeAppointments: typeof appointments;
   pastAppointments: typeof appointments;
+  supportThreads: SupportThread[];
   activeId: string;
   isDoctor: boolean;
   isAdmin: boolean;
@@ -1071,7 +1168,7 @@ function ChatList({
       <div className="border-b border-white/30 px-4 py-3">
         <h3 className="font-bold text-ink-800">گفتگوها</h3>
         <p className="text-[11px] text-ink-400">
-          {toFa(myAppointments.length)} گفتگو
+          {toFa(myAppointments.length + supportThreads.length)} گفتگو
         </p>
       </div>
       <div className="flex-1 overflow-y-auto">
@@ -1098,6 +1195,47 @@ function ChatList({
                 </p>
               </div>
             </button>
+            <div className="mx-4 my-1 h-px bg-white/40" />
+          </>
+        )}
+
+        {/* Admin support threads */}
+        {isAdmin && supportThreads.length > 0 && (
+          <>
+            <p className="px-4 pb-1 pt-2.5 text-[10px] font-bold text-ink-400">
+              پشتیبانی
+            </p>
+            {supportThreads.map((t) => {
+              const active = activeId === `${SUPPORT_PREFIX}${t.id}`;
+              return (
+                <button
+                  key={t.id}
+                  onClick={() => onSelect(`${SUPPORT_PREFIX}${t.id}`)}
+                  className={cn(
+                    "flex w-full items-center gap-3 px-4 py-3 text-right transition",
+                    active ? "bg-primary-50/80" : "hover:bg-white/40",
+                  )}
+                >
+                  <div className="grid h-10 w-10 shrink-0 place-items-center rounded-full bg-primary-100 text-primary-600">
+                    <BiSupport className="h-5 w-5" />
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-semibold text-ink-800">
+                      {t.participantName}
+                      <span className="mr-1 text-[10px] font-normal text-ink-400">
+                        {t.participantRole === "doctor" ? "پزشک" : "بیمار"}
+                      </span>
+                    </p>
+                    <p className="truncate text-[11px] text-ink-400">
+                      {t.lastMessage || "بدون پیام"}
+                    </p>
+                  </div>
+                  {t.messageCount > 0 && (
+                    <Badge tone="teal">{toFa(t.messageCount)}</Badge>
+                  )}
+                </button>
+              );
+            })}
             <div className="mx-4 my-1 h-px bg-white/40" />
           </>
         )}

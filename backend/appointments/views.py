@@ -176,7 +176,10 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         serializer.is_valid(raise_exception=True)
         for field, value in serializer.validated_data.items():
             setattr(appointment, field, value)
-        appointment.status = 'pending-payment'
+        payment = getattr(appointment, 'payment_record', None)
+        appointment.status = (
+            'waiting' if payment and payment.status == 'success' else 'pending-payment'
+        )
         appointment.save()
         return Response(AppointmentSerializer(appointment).data)
 

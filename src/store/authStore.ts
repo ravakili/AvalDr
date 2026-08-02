@@ -1,8 +1,9 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import type { Role, User, UserData, UploadingFile } from "../types";
-import { api } from "../lib/api";
+import { api, uploadFileWithProgress } from "../lib/api";
 import { setApiTokens } from "../lib/api";
+import { toast } from "./toastStore";
 
 interface AuthState {
   user: User | null;
@@ -34,7 +35,10 @@ interface AuthState {
   setUploadedDocs: (key: string, files: UploadingFile[]) => void;
   addUploadedDoc: (key: string, file: UploadingFile) => void;
   updateUploadProgress: (key: string, fileId: string, progress: number) => void;
-  completeProfile: () => Promise<void>;
+  completeProfile: (
+    documents?: Record<string, UploadingFile[]>,
+    onProgress?: (percent: number) => void,
+  ) => Promise<void>;
   reset: () => void;
 }
 
@@ -187,14 +191,62 @@ export const useAuthStore = create<AuthState>()(
         });
       },
 
-      completeProfile: async () => {
+      completeProfile: async (
+        documents?: Record<string, UploadingFile[]>,
+        onProgress?: (percent: number) => void,
+      ) => {
         const { userData, isDoctor } = get();
+        const uploaded = documents || get().uploadedDocs;
         set({ isLoading: true });
         try {
           const user = await api.post<User>("/auth/complete-profile/", {
             ...userData,
+            dateOfBirth: userData.dateOfBirth || null,
             isDoctor,
           });
+          const docTypeMap: Record<string, string> = {
+            license: "license",
+            nationalId: "national_id",
+            experience: "experience",
+            specialty: "specialty",
+            profilePhoto: "profile_photo",
+          };
+          if (user.role === "doctor") {
+            const pending: { type: string; file: File }[] = [];
+            Object.entries(uploaded || {}).forEach(([key, files]) => {
+              const type = docTypeMap[key];
+              if (!type) return;
+              (files || [])
+                .filter((f) => f.file instanceof File)
+                .forEach((f) => pending.push({ type, file: f.file as File }));
+            });
+            const total = pending.length;
+            let done = 0;
+            let failed = 0;
+            await Promise.all(
+              pending.map(async ({ type, file }) => {
+                const form = new FormData();
+                form.append("type", type);
+                form.append("file", file);
+                try {
+                  await uploadFileWithProgress("/doctors/me/documents/", form, (p) => {
+                    onProgress?.(Math.round(((done + p / 100) / total) * 100));
+                  });
+                } catch {
+                  failed += 1;
+                } finally {
+                  done += 1;
+                  onProgress?.(Math.round((done / total) * 100));
+                }
+              }),
+            );
+            if (failed) {
+              toast.warning(
+                "برخی مدارک بارگذاری نشد",
+                "می‌توانید بعداً از پنل پزشک مدارک را بارگذاری کنید.",
+              );
+            }
+          }
           set({
             user,
             isLoading: false,
@@ -231,7 +283,12 @@ export const useAuthStore = create<AuthState>()(
         phone: state.phone,
         isDoctor: state.isDoctor,
         userData: state.userData,
-        uploadedDocs: state.uploadedDocs,
+        uploadedDocs: Object.fromEntries(
+          Object.entries(state.uploadedDocs).map(([key, files]) => [
+            key,
+            files.map(({ file, ...rest }) => rest),
+          ]),
+        ),
       }),
     },
   ),

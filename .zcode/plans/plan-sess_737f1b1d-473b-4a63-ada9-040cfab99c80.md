@@ -1,1 +1,0 @@
-# AvalDr — Full Authentication Flow Implementation Plan 🏥

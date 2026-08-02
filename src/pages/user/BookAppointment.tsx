@@ -38,6 +38,20 @@ const dayLabel = (iso: string, idx: number) => {
   return { wd, dm, isToday: idx === 0 }
 }
 
+const normalizeDay = (day: string) => day.replace(/\u200c/g, '')
+
+const dayOrderFa: Record<string, number> = {
+  'شنبه': 0,
+  'یکشنبه': 1,
+  'دوشنبه': 2,
+  'سه‌شنبه': 3,
+  'چهارشنبه': 4,
+  'پنجشنبه': 5,
+  'جمعه': 6,
+}
+
+const saturdayFirst = (iso: string) => (new Date(iso).getDay() + 1) % 7
+
 const nowTimeStr = () => {
   const d = new Date()
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`
@@ -60,7 +74,13 @@ export default function BookAppointment() {
   const isToday = day === nextDays[0]
   const currentTime = nowTimeStr()
 
-  const dayCards = useMemo(() => nextDays.map((iso, i) => ({ iso, ...dayLabel(iso, i) })), [])
+  const dayCards = useMemo(
+    () =>
+      nextDays
+        .map((iso, i) => ({ iso, ...dayLabel(iso, i) }))
+        .sort((a, b) => saturdayFirst(a.iso) - saturdayFirst(b.iso)),
+    [],
+  )
 
   const slots = useMemo(() => {
     return rawSlots
@@ -84,6 +104,26 @@ export default function BookAppointment() {
         setRawSlots(fallbackSlots.map((t) => ({ time: t, available: true })))
       })
   }, [doctor, day])
+
+  useEffect(() => {
+    if (!doctor) return
+    const available = (['video', 'audio', 'chat'] as ConsultType[]).filter(
+      (key) => !doctor.communication || doctor.communication[key]?.enabled !== false,
+    )
+    if (available.length && !available.includes(consultType)) {
+      setConsultType(available[0])
+    }
+  }, [doctor, consultType])
+
+  const comm = doctor?.communication
+  const consultOptions = (
+    [
+      { key: 'video', label: 'ویدئویی', icon: <IconVideo /> },
+      { key: 'audio', label: 'صوتی', icon: <IconPhone /> },
+      { key: 'chat', label: 'متنی', icon: <IconChat /> },
+    ] as { key: ConsultType; label: string; icon: React.ReactNode }[]
+  ).filter((c) => !comm || comm[c.key]?.enabled !== false)
+  const consultFee = (type: ConsultType) => comm?.[type]?.fee ?? doctor?.fee ?? 0
 
   if (!doctor) {
     return (
@@ -125,12 +165,6 @@ export default function BookAppointment() {
     }
   }
 
-  const commFee = {
-    chat: 100000,
-    audio: 150000,
-    video: 250000,
-  }
-
   return (
     <div className="space-y-6">
       <GlassCard className="p-5">
@@ -161,23 +195,26 @@ export default function BookAppointment() {
               </div>
             </div>
           </div>
-          <div className="shrink-0 rounded-2xl border border-white/50 bg-white/50 px-5 py-3 text-center">
-            <p className="text-xs text-ink-400">تعرفه ویزیت</p>
-            <p className="text-lg font-bold text-ink-800 tabular">{formatToman(commFee[consultType])}</p>
-          </div>
-        </div>
+           </div>
 
         {doctor.workingHours.length > 0 && (
           <div className="mt-4 border-t border-white/50 pt-4">
             <p className="mb-2 text-sm font-medium text-ink-700">روزها و ساعات در دسترس</p>
             <div className="flex flex-wrap gap-2">
-              {doctor.workingHours.map((wh, i) => (
-                <div key={i} className="rounded-xl border border-white/50 bg-white/40 px-3 py-2 text-xs">
-                  <span className="font-semibold text-ink-800">{wh.day}</span>
-                  <span className="mx-1 text-ink-300">|</span>
-                  <span className="tabular text-ink-600">{toFa(wh.from)} تا {toFa(wh.to)}</span>
-                </div>
-              ))}
+              {[...doctor.workingHours]
+                .sort(
+                  (a, b) =>
+                    (dayOrderFa[normalizeDay(a.day)] ?? 99) -
+                    (dayOrderFa[normalizeDay(b.day)] ?? 99) ||
+                    a.from.localeCompare(b.from),
+                )
+                .map((wh, i) => (
+                  <div key={i} className="rounded-xl border border-white/50 bg-white/40 px-3 py-2 text-xs">
+                    <span className="font-semibold text-ink-800">{wh.day}</span>
+                    <span className="mx-1 text-ink-300">|</span>
+                    <span className="tabular text-ink-600">{toFa(wh.from)} تا {toFa(wh.to)}</span>
+                  </div>
+                ))}
             </div>
           </div>
         )}
@@ -248,30 +285,30 @@ export default function BookAppointment() {
 
           <div className="mt-6">
             <p className="mb-1.5 block text-sm font-medium text-ink-700">نوع مشاوره</p>
-            <div className="grid grid-cols-3 gap-3">
-              {(
-                [
-                  { key: 'video', label: 'ویدئویی', icon: <IconVideo /> },
-                  { key: 'audio', label: 'صوتی', icon: <IconPhone /> },
-                  { key: 'chat', label: 'متنی', icon: <IconChat /> },
-                ] as { key: ConsultType; label: string; icon: React.ReactNode }[]
-              ).map((c) => (
-                <button
-                  key={c.key}
-                  type="button"
-                  onClick={() => setConsultType(c.key)}
-                  className={cn(
-                    'flex flex-col items-center gap-1.5 rounded-2xl border p-3 transition-all',
-                    consultType === c.key
-                      ? 'border-primary-400 bg-primary-50 text-primary-700 shadow-glass-sm'
-                      : 'border-white/50 bg-white/40 text-ink-500 hover:bg-white/60',
-                  )}
-                >
-                  <span>{c.icon}</span>
-                  <span className="text-xs font-medium">{c.label}</span>
-                </button>
-              ))}
-            </div>
+            {consultOptions.length > 0 ? (
+              <div className="grid grid-cols-3 gap-3">
+                {consultOptions.map((c) => (
+                  <button
+                    key={c.key}
+                    type="button"
+                    onClick={() => setConsultType(c.key)}
+                    className={cn(
+                      'flex flex-col items-center gap-1.5 rounded-2xl border p-3 transition-all',
+                      consultType === c.key
+                        ? 'border-primary-400 bg-primary-50 text-primary-700 shadow-glass-sm'
+                        : 'border-white/50 bg-white/40 text-ink-500 hover:bg-white/60',
+                    )}
+                  >
+                    <span>{c.icon}</span>
+                    <span className="text-xs font-medium">{c.label}</span>
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <p className="rounded-xl border border-amber-200/70 bg-amber-50/60 p-3 text-xs text-amber-700">
+                این پزشک فعلاً هیچ روش مشاوره‌ای را فعال نکرده است.
+              </p>
+            )}
           </div>
         </GlassCard>
 
@@ -283,7 +320,7 @@ export default function BookAppointment() {
             <Row label="روز" value={new Intl.DateTimeFormat('fa-IR', { weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(day))} />
             <Row label="ساعت" value={time ? `${toFa(time)}` : '—'} highlight />
             <Row label="نوع مشاوره" value={consultType === 'video' ? 'ویدئویی' : consultType === 'audio' ? 'صوتی' : 'متنی'} />
-            <Row label="تعرفه" value={formatToman(commFee[consultType])} />
+            <Row label="تعرفه" value={formatToman(consultFee(consultType))} />
           </dl>
 
           <PrimaryButton

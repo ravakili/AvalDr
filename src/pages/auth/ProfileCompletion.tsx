@@ -4,16 +4,26 @@ import { useAuthStore } from "../../store/authStore";
 import GlassCard from "../../components/ui/GlassCard";
 import InputField, { SelectField } from "../../components/ui/InputField";
 import Toggle from "../../components/ui/Toggle";
+import JalaliDateSelect from "../../components/ui/JalaliDateSelect";
 import { cn, toFa } from "../../lib/utils";
+import { api } from "../../lib/api";
 import type { UploadingFile } from "../../types";
-import DatePicker from 'react-multi-date-picker'
-import persian from 'react-date-object/calendars/persian'
-import persian_fa from 'react-date-object/locales/persian_fa'
-import type { Value } from 'react-multi-date-picker'
 import { MdOutlineKeyboardArrowRight } from "react-icons/md";
 import { toast } from "../../store/toastStore";
 
 const bloodTypes = ["A+", "A-", "B+", "B-", "AB+", "AB-", "O+", "O-"];
+
+const DEF_TYPES = [
+  "allergy",
+  "diagnosis",
+  "insurance_type",
+  "supplementary_insurance",
+];
+
+interface DefinitionItem {
+  id: string;
+  name: string;
+}
 
 export default function ProfileCompletion() {
   const navigate = useNavigate();
@@ -31,17 +41,53 @@ export default function ProfileCompletion() {
   } = useAuthStore();
 
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [allergyInput, setAllergyInput] = useState("");
-  const [allergySelect, setAllergySelect] = useState("");
-  const [conditionInput, setConditionInput] = useState("");
-  const [conditionSelect, setConditionSelect] = useState("");
-
-  const allergyOptions = ["پنی‌سیلین", "سولفونامید", "گلوتن", "گرده گل", "آسپرین", "لاکتوز", "بادام زمینی"];
-  const conditionOptions = ["فشار خون بالا", "دیابت نوع ۲", "چربی خون", "میگرن مزمن", "کم‌خونی", "آسم", "دیابت بارداری"];
+  const [defOptions, setDefOptions] = useState<Record<string, DefinitionItem[]>>({});
+  const [uploadProgress, setUploadProgress] = useState(0);
 
   // Inline document upload state
-  const docCancelRef = useRef<Record<string, () => void>>({});
   const [docFiles, setDocFiles] = useState<Record<string, UploadingFile[]>>({});
+
+  useEffect(() => {
+    Promise.all(
+      DEF_TYPES.map(async (type) => {
+        try {
+          const data = await api.get<DefinitionItem[]>(`/common/definitions/?type=${type}`);
+          return [type, data] as const;
+        } catch {
+          return [type, []] as const;
+        }
+      }),
+    ).then((results) => setDefOptions(Object.fromEntries(results)));
+  }, []);
+
+  const allergyOptions = (defOptions.allergy || []).map((d) => d.name);
+  const conditionOptions = (defOptions.diagnosis || []).map((d) => d.name);
+
+  // Inline document upload state
+  const handleDocFile = (key: string, file: File) => {
+    const field = docFields.find((f) => f.key === key);
+    if (field && file.size > field.maxSize * 1024 * 1024) {
+      toast.warning("حجم فایل بیش از حد مجاز است", `حداکثر حجم این فایل ${toFa(field.maxSize)} مگابایت است.`);
+      return;
+    }
+    const item: UploadingFile = {
+      id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      name: file.name,
+      size: file.size,
+      type: file.name.split(".").pop() || "",
+      status: "pending",
+      progress: 0,
+      file,
+    };
+    setDocFiles((prev) => ({ ...prev, [key]: [...(prev[key] || []), item] }));
+  };
+
+  const removeDocFile = (key: string, fileId: string) => {
+    setDocFiles((prev) => ({
+      ...prev,
+      [key]: (prev[key] || []).filter((f) => f.id !== fileId),
+    }));
+  };
 
   const docFields = [
     {
@@ -86,67 +132,6 @@ export default function ProfileCompletion() {
     },
   ];
 
-  const simulateDocUpload = (key: string, file: UploadingFile) => {
-    const interval = setInterval(() => {
-      const p = Math.min(
-        100,
-        Math.round(
-          Math.random() * 15 +
-            5 +
-            (docFiles[key]?.find((f) => f.id === file.id)?.progress || 0),
-        ),
-      );
-      if (p >= 100) {
-        clearInterval(interval);
-        setDocFiles((prev) => ({
-          ...prev,
-          [key]: (prev[key] || []).map((f) =>
-            f.id === file.id
-              ? { ...f, progress: 100, status: "uploaded" as const }
-              : f,
-          ),
-        }));
-      } else {
-        setDocFiles((prev) => ({
-          ...prev,
-          [key]: (prev[key] || []).map((f) =>
-            f.id === file.id
-              ? { ...f, progress: p, status: "uploading" as const }
-              : f,
-          ),
-        }));
-      }
-    }, 300);
-    docCancelRef.current[file.id] = () => clearInterval(interval);
-  };
-
-  const handleDocFile = (key: string, file: File) => {
-    const field = docFields.find((f) => f.key === key);
-    if (field && file.size > field.maxSize * 1024 * 1024) {
-      toast.warning("حجم فایل بیش از حد مجاز است", `حداکثر حجم این فایل ${toFa(field.maxSize)} مگابایت است.`);
-      return;
-    }
-    const item: UploadingFile = {
-      id: `f-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      name: file.name,
-      size: file.size,
-      type: file.name.split(".").pop() || "",
-      status: "pending",
-      progress: 0,
-    };
-    setDocFiles((prev) => ({ ...prev, [key]: [...(prev[key] || []), item] }));
-    setTimeout(() => simulateDocUpload(key, item), 200);
-  };
-
-  const removeDocFile = (key: string, fileId: string) => {
-    docCancelRef.current[fileId]?.();
-    delete docCancelRef.current[fileId];
-    setDocFiles((prev) => ({
-      ...prev,
-      [key]: (prev[key] || []).filter((f) => f.id !== fileId),
-    }));
-  };
-
   useEffect(() => {
     if (user) {
       const home =
@@ -171,7 +156,7 @@ export default function ProfileCompletion() {
     if (isDoctor) {
       const required = docFields.filter(f => f.required);
       for (const field of required) {
-        if (!docFiles[field.key]?.some(f => f.status === 'uploaded')) {
+        if (!docFiles[field.key]?.some(f => Boolean(f.file))) {
           e[field.key] = `بارگذاری ${field.label} الزامی است`;
         }
       }
@@ -194,35 +179,19 @@ export default function ProfileCompletion() {
     if (step === 1 && validateStep1()) setStep(2);
     else if (step === 2 && validateStep2()) setStep(3);
     else if (step === 3 && validateStep3()) {
-      completeProfile();
+      setUploadProgress(0);
+      completeProfile(docFiles, setUploadProgress).catch((error) => {
+        toast.error(
+          "ثبت نام انجام نشد",
+          error instanceof Error ? error.message : undefined,
+        );
+      });
     }
   };
 
   const prev = () => {
     if (step > 1) setStep(step - 1);
     else navigate("/login", { replace: true });
-  };
-
-  const addChip = (
-    field: "allergies" | "chronicConditions",
-    value: string,
-    input: string,
-    setInput: (v: string) => void,
-  ) => {
-    const trimmed = (value || input).trim();
-    if (!trimmed) return;
-    const current = userData[field];
-    if (!current.includes(trimmed)) {
-      setUserData({ [field]: [...current, trimmed] });
-    }
-    setInput("");
-  };
-
-  const removeChip = (
-    field: "allergies" | "chronicConditions",
-    item: string,
-  ) => {
-    setUserData({ [field]: userData[field].filter((a) => a !== item) });
   };
 
   return (
@@ -293,27 +262,15 @@ export default function ProfileCompletion() {
                 error={errors.name}
               />
 
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-ink-700">تاریخ تولد</label>
-                <DatePicker
-                  value={userData.dateOfBirth || undefined}
-                  onChange={(value: Value) => {
-                    if (value && typeof value === 'object' && 'toDate' in value) {
-                      const d = (value as { toDate: () => Date }).toDate()
-                      setUserData({ dateOfBirth: d.toISOString().split('T')[0] })
-                      setErrors((prev) => ({ ...prev, dateOfBirth: "" }))
-                    }
-                  }}
-                  calendar={persian}
-                  locale={persian_fa}
-                  calendarPosition="bottom-right"
-                  inputClass="glass-input w-full rounded-xl px-4 py-2.5 text-sm text-ink-800 outline-none focus:ring-2 focus:ring-primary-200"
-                  containerClassName="w-full"
-                  format="YYYY/MM/DD"
-                  placeholder="انتخاب تاریخ"
-                />
-                {errors.dateOfBirth && <p className="mt-1 text-xs text-red-500">{errors.dateOfBirth}</p>}
-              </div>
+              <JalaliDateSelect
+                label="تاریخ تولد (شمسی)"
+                value={userData.dateOfBirth}
+                onChange={(iso) => {
+                  setUserData({ dateOfBirth: iso });
+                  setErrors((prev) => ({ ...prev, dateOfBirth: "" }));
+                }}
+                error={errors.dateOfBirth}
+              />
 
               <div>
                 <label className="mb-1.5 block text-sm font-medium text-ink-700">
@@ -354,13 +311,17 @@ export default function ProfileCompletion() {
                 <option value="آزاد">آزاد</option>
               </SelectField>
 
-              <InputField
+              <SelectField
                 label="بیمه تکمیلی"
                 name="supplementaryInsurance"
-                placeholder="در صورت وجود"
                 value={userData.supplementaryInsurance}
                 onChange={(e) => setUserData({ supplementaryInsurance: e.target.value })}
-              />
+              >
+                <option value="">ندارد</option>
+                {(defOptions.supplementary_insurance || []).map((d) => (
+                  <option key={d.id} value={d.name}>{d.name}</option>
+                ))}
+              </SelectField>
             </div>
           )}
 
@@ -384,135 +345,23 @@ export default function ProfileCompletion() {
                 ))}
               </SelectField>
 
-              {/* Allergies */}
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-ink-700">
-                  حساسیت‌ها
-                </label>
-                <div className="flex gap-2 mb-2">
-                  <select
-                    value={allergySelect}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === "__other__") return;
-                      if (val) {
-                        addChip("allergies", val, allergyInput, setAllergyInput);
-                        setAllergySelect("");
-                      }
-                    }}
-                    className="glass-input flex-1 rounded-xl px-3 py-2 text-sm text-ink-800 outline-none"
-                  >
-                    <option value="">انتخاب از موارد موجود</option>
-                    {allergyOptions.filter(o => !userData.allergies.includes(o)).map(o => (
-                      <option key={o} value={o}>{o}</option>
-                    ))}
-                    <option value="__other__">سایر (تایپ کنید)</option>
-                  </select>
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    className="glass-input flex-1 rounded-xl px-3 py-2 text-sm text-ink-800 outline-none"
-                    placeholder="مورد جدید تایپ کنید"
-                    value={allergyInput}
-                    onChange={(e) => setAllergyInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addChip("allergies", allergyInput, allergyInput, setAllergyInput);
-                      }
-                    }}
-                  />
-                  <button
-                    onClick={() => addChip("allergies", allergyInput, allergyInput, setAllergyInput)}
-                    className="rounded-xl bg-primary-500 px-3 text-sm text-white"
-                  >
-                    +
-                  </button>
-                </div>
-                {userData.allergies.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {userData.allergies.map((a) => (
-                      <span
-                        key={a}
-                        className="inline-flex items-center gap-1 rounded-full bg-red-50 px-3 py-1 text-xs text-red-700"
-                      >
-                        {a}
-                        <button
-                          onClick={() => removeChip("allergies", a)}
-                          className="text-red-400 hover:text-red-600"
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <ChipMultiSelect
+                label="حساسیت‌ها"
+                options={allergyOptions}
+                values={userData.allergies}
+                onChange={(v) => setUserData({ allergies: v })}
+                tone="red"
+                placeholder="مثلاً پنی‌سیلین"
+              />
 
-              {/* Chronic Conditions */}
-              <div>
-                <label className="mb-1.5 block text-sm font-medium text-ink-700">
-                  بیماری‌های زمینه‌ای
-                </label>
-                <div className="flex gap-2 mb-2">
-                  <select
-                    value={conditionSelect}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      if (val === "__other__") return;
-                      if (val) {
-                        addChip("chronicConditions", val, conditionInput, setConditionInput);
-                        setConditionSelect("");
-                      }
-                    }}
-                    className="glass-input flex-1 rounded-xl px-3 py-2 text-sm text-ink-800 outline-none"
-                  >
-                    <option value="">انتخاب از موارد موجود</option>
-                    {conditionOptions.filter(o => !userData.chronicConditions.includes(o)).map(o => (
-                      <option key={o} value={o}>{o}</option>
-                    ))}
-                    <option value="__other__">سایر (تایپ کنید)</option>
-                  </select>
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    className="glass-input flex-1 rounded-xl px-3 py-2 text-sm text-ink-800 outline-none"
-                    placeholder="مورد جدید تایپ کنید"
-                    value={conditionInput}
-                    onChange={(e) => setConditionInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") {
-                        e.preventDefault();
-                        addChip("chronicConditions", conditionInput, conditionInput, setConditionInput);
-                      }
-                    }}
-                  />
-                  <button
-                    onClick={() => addChip("chronicConditions", conditionInput, conditionInput, setConditionInput)}
-                    className="rounded-xl bg-primary-500 px-3 text-sm text-white"
-                  >
-                    +
-                  </button>
-                </div>
-                {userData.chronicConditions.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1.5">
-                    {userData.chronicConditions.map((c) => (
-                      <span
-                        key={c}
-                        className="inline-flex items-center gap-1 rounded-full bg-yellow-50 px-3 py-1 text-xs text-yellow-700"
-                      >
-                        {c}
-                        <button
-                          onClick={() => removeChip("chronicConditions", c)}
-                          className="text-yellow-400 hover:text-yellow-600"
-                        >
-                          ✕
-                        </button>
-                      </span>
-                    ))}
-                  </div>
-                )}
-              </div>
+              <ChipMultiSelect
+                label="بیماری‌های زمینه‌ای"
+                options={conditionOptions}
+                values={userData.chronicConditions}
+                onChange={(v) => setUserData({ chronicConditions: v })}
+                tone="yellow"
+                placeholder="مثلاً دیابت نوع ۲"
+              />
 
               {/* Emergency Contact */}
               <div className="glass-soft rounded-2xl p-4 space-y-3">
@@ -656,21 +505,15 @@ export default function ProfileCompletion() {
                                   <span className="flex-1 truncate text-ink-600">
                                     {f.name}
                                   </span>
-                                  {f.status === "uploading" ? (
-                                    <div className="flex items-center gap-1.5">
-                                      <div className="h-1.5 w-12 overflow-hidden rounded-full bg-primary-100">
-                                        <div
-                                          className="h-full rounded-full bg-primary-500 transition-all"
-                                          style={{ width: `${f.progress}%` }}
-                                        />
-                                      </div>
-                                      <span className="tabular text-primary-600">
-                                        {toFa(f.progress)}%
-                                      </span>
-                                    </div>
-                                  ) : f.status === "uploaded" ? (
+                                  {f.status === "uploaded" ? (
                                     <span className="text-green-600">✅</span>
-                                  ) : null}
+                                  ) : f.status === "error" ? (
+                                    <span className="text-[10px] text-red-500">خطا</span>
+                                  ) : (
+                                    <span className="rounded bg-ink-100 px-2 py-0.5 text-[10px] text-ink-500">
+                                      در انتظار آپلود هنگام ثبت‌نام
+                                    </span>
+                                  )}
                                   <button
                                     onClick={() =>
                                       removeDocFile(field.key, f.id)
@@ -786,7 +629,9 @@ export default function ProfileCompletion() {
                       strokeLinecap="round"
                     />
                   </svg>
-                  در حال ثبت‌نام...
+                  {uploadProgress > 0 && uploadProgress < 100
+                    ? `در حال آپلود مدارک ${toFa(uploadProgress)}٪...`
+                    : "در حال ثبت‌نام..."}
                 </>
               ) : step === 3 ? (
                 "ثبت نام"
@@ -847,6 +692,107 @@ function DocDropZone({
           e.target.value = "";
         }}
       />
+    </div>
+  );
+}
+
+interface ChipMultiSelectProps {
+  label: string;
+  options: string[];
+  values: string[];
+  onChange: (values: string[]) => void;
+  tone: "red" | "yellow";
+  placeholder?: string;
+}
+
+function ChipMultiSelect({
+  label,
+  options,
+  values,
+  onChange,
+  tone,
+  placeholder,
+}: ChipMultiSelectProps) {
+  const [input, setInput] = useState("");
+  const [selected, setSelected] = useState("");
+
+  const chipClass =
+    tone === "red"
+      ? "bg-red-50 text-red-700"
+      : "bg-yellow-50 text-yellow-700";
+  const xClass = tone === "red" ? "text-red-400 hover:text-red-600" : "text-yellow-400 hover:text-yellow-600";
+
+  const add = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed || values.includes(trimmed)) return;
+    onChange([...values, trimmed]);
+  };
+
+  return (
+    <div>
+      <label className="mb-1.5 block text-sm font-medium text-ink-700">{label}</label>
+      <select
+        value={selected}
+        onChange={(e) => {
+          const v = e.target.value;
+          if (v === "__other__") return;
+          if (v) {
+            add(v);
+            setSelected("");
+          }
+        }}
+        className="glass-input mb-2 w-full rounded-xl px-3 py-2 text-sm text-ink-800 outline-none"
+      >
+        <option value="">انتخاب از موارد موجود</option>
+        {options.filter((o) => !values.includes(o)).map((o) => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+        <option value="__other__">سایر (تایپ کنید)</option>
+      </select>
+      <div className="flex gap-2">
+        <input
+          className="glass-input flex-1 rounded-xl px-3 py-2 text-sm text-ink-800 outline-none"
+          placeholder={placeholder || "مورد جدید"}
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              add(input);
+              setInput("");
+            }
+          }}
+        />
+        <button
+          type="button"
+          onClick={() => {
+            add(input);
+            setInput("");
+          }}
+          className="rounded-xl bg-primary-500 px-3 text-sm text-white"
+        >
+          +
+        </button>
+      </div>
+      {values.length > 0 && (
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {values.map((v) => (
+            <span
+              key={v}
+              className={`inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs ${chipClass}`}
+            >
+              {v}
+              <button
+                type="button"
+                onClick={() => onChange(values.filter((x) => x !== v))}
+                className={xClass}
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

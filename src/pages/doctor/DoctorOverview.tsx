@@ -1,12 +1,14 @@
-import { Link } from 'react-router-dom'
-import { useEffect } from 'react'
-import GlassCard from '../../components/ui/GlassCard'
-import Avatar from '../../components/ui/Avatar'
-import PrimaryButton from '../../components/ui/PrimaryButton'
-import StatCard from '../../components/ui/StatCard'
-import ChartCard from '../../components/ui/ChartCard'
-import { StatusBadge } from '../../components/ui/Badge'
-import EmptyState from '../../components/ui/EmptyState'
+import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import GlassCard from "../../components/ui/GlassCard";
+import Avatar from "../../components/ui/Avatar";
+import PrimaryButton from "../../components/ui/PrimaryButton";
+import StatCard from "../../components/ui/StatCard";
+import ChartCard from "../../components/ui/ChartCard";
+import Modal from "../../components/ui/Modal";
+import InputField from "../../components/ui/InputField";
+import { StatusBadge } from "../../components/ui/Badge";
+import EmptyState from "../../components/ui/EmptyState";
 import {
   IconActivity,
   IconCalendar,
@@ -15,7 +17,7 @@ import {
   IconClock,
   IconWallet,
   IconUsers,
-} from '../../components/ui/icons'
+} from "../../components/ui/icons";
 import {
   Bar,
   BarChart,
@@ -24,28 +26,84 @@ import {
   Tooltip,
   XAxis,
   YAxis,
-} from 'recharts'
-import { appointments, doctorEarnings, getPatient, refreshBackendData } from '../../data/apiData'
-import { formatDateFa, formatToman, toFa } from '../../lib/utils'
-import { useAuthStore } from '../../store/authStore'
-const primaryChartColor = 'rgb(var(--color-primary-500))'
-const chartGridColor = 'rgb(148 163 184 / 0.24)'
-const chartAxisColor = '#94a3b8'
+} from "recharts";
+import {
+  appointments,
+  doctorEarnings,
+  doctors,
+  getPatient,
+  refreshBackendData,
+} from "../../data/apiData";
+import { formatDateFa, formatToman, toFa } from "../../lib/utils";
+import { useAuthStore } from "../../store/authStore";
+import { api } from "../../lib/api";
+import { toast } from "../../store/toastStore";
+const primaryChartColor = "rgb(var(--color-primary-500))";
+const chartGridColor = "rgb(148 163 184 / 0.24)";
+const chartAxisColor = "#94a3b8";
 
 export default function DoctorOverview() {
-  const ME = useAuthStore((state) => state.user?.refId || '')
+  const ME = useAuthStore((state) => state.user?.refId || "");
+  const [withdrawOpen, setWithdrawOpen] = useState(false);
+  const [withdrawAmount, setWithdrawAmount] = useState("");
+  const [withdrawBank, setWithdrawBank] = useState("");
+  const [withdrawing, setWithdrawing] = useState(false);
 
   useEffect(() => {
-    refreshBackendData('doctor').catch(() => {})
-  }, [])
+    refreshBackendData("doctor").catch(() => {});
+  }, []);
 
-  const mine = appointments.filter((a) => a.doctorId === ME)
-  const today = mine.filter((a) => a.status === 'in-progress' || a.status === 'waiting')
-  const pending = today.filter((a) => a.status === 'waiting')
-  const monthTotal = mine.length
+  const myDoctor = doctors.find((d) => d.id === ME);
+
+  const openWithdraw = () => {
+    setWithdrawAmount("");
+    setWithdrawBank(myDoctor?.shaba || "");
+    setWithdrawOpen(true);
+  };
+
+  const handleWithdraw = async () => {
+    const amount = Number(withdrawAmount);
+    if (!amount || amount <= 0) {
+      toast.warning("مبلغ نامعتبر است", "مبلغ درخواست برداشت را وارد کنید.");
+      return;
+    }
+    if (amount > (doctorEarnings.pending || 0)) {
+      toast.warning("مبلغ بیش از حد مجاز", "مبلغ درخواست بیشتر از موجودی قابل برداشت است.");
+      return;
+    }
+    setWithdrawing(true);
+    try {
+      await api.post("/doctors/me/withdrawals/", {
+        amount,
+        bankInfo: withdrawBank.trim() || undefined,
+      });
+      toast.success(
+        "درخواست برداشت ثبت شد",
+        "پس از بررسی توسط مدیر، مبلغ به حساب شما واریز میشود.",
+      );
+      setWithdrawOpen(false);
+      refreshBackendData("doctor").catch(() => {});
+    } catch (error) {
+      toast.error(
+        "ثبت درخواست انجام نشد",
+        error instanceof Error ? error.message : undefined,
+      );
+    } finally {
+      setWithdrawing(false);
+    }
+  };
+
+  const mine = appointments.filter((a) => a.doctorId === ME);
+  const today = mine.filter(
+    (a) => a.status === "in-progress" || a.status === "waiting",
+  );
+  const pending = today.filter((a) => a.status === "waiting");
+  const monthTotal = mine.length;
   const earningsDelta = Math.round(
-    ((doctorEarnings.thisMonth - doctorEarnings.lastMonth) / doctorEarnings.lastMonth) * 100,
-  )
+    ((doctorEarnings.thisMonth - doctorEarnings.lastMonth) /
+      doctorEarnings.lastMonth) *
+      100,
+  );
 
   return (
     <div className="space-y-6">
@@ -95,24 +153,34 @@ export default function DoctorOverview() {
               </div>
               <p className="font-semibold">درآمد این ماه</p>
             </div>
-            <span className={`rounded-full px-2 py-0.5 text-xs font-bold ${earningsDelta >= 0 ? 'bg-emerald-400/30' : 'bg-red-400/30'}`}>
-              {earningsDelta >= 0 ? '+' : ''}{toFa(earningsDelta)}٪
+            <span
+              className={`rounded-full px-2 py-0.5 text-xs font-bold ${earningsDelta >= 0 ? "bg-emerald-400/30" : "bg-red-400/30"}`}
+            >
+              {earningsDelta >= 0 ? "+" : ""}
+              {toFa(earningsDelta)}٪
             </span>
           </div>
-          <p className="mt-4 text-3xl font-bold tabular">{formatToman(doctorEarnings.thisMonth)}</p>
+          <p className="mt-4 text-3xl font-bold tabular">
+            {formatToman(doctorEarnings.thisMonth)}
+          </p>
           <div className="mt-5 grid grid-cols-2 gap-3 border-t border-white/20 pt-4 text-sm">
             <div>
               <p className="text-white/70 text-xs">قابل برداشت</p>
-              <p className="font-semibold tabular">{formatToman(doctorEarnings.pending).replace(' تومان', '')}</p>
+              <p className="font-semibold tabular">
+                {formatToman(doctorEarnings.pending).replace(" تومان", "")}
+              </p>
             </div>
             <div>
               <p className="text-white/70 text-xs">برداشت‌شده</p>
-              <p className="font-semibold tabular">{formatToman(doctorEarnings.withdrawn).replace(' تومان', '')}</p>
+              <p className="font-semibold tabular">
+                {formatToman(doctorEarnings.withdrawn).replace(" تومان", "")}
+              </p>
             </div>
           </div>
           <PrimaryButton
             variant="ghost"
             className="mt-4 w-full !bg-white/20 !text-white hover:!bg-white/30"
+            onClick={openWithdraw}
           >
             درخواست برداشت
           </PrimaryButton>
@@ -126,23 +194,42 @@ export default function DoctorOverview() {
         >
           <div className="h-56" dir="ltr">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={doctorEarnings.weekly} margin={{ top: 8, right: 8, bottom: 0, left: -16 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} vertical={false} />
-                <XAxis dataKey="week" tick={{ fontSize: 12, fontFamily: 'Vazirmatn' }} stroke={chartAxisColor} />
-                <YAxis tick={{ fontSize: 11 }} stroke={chartAxisColor} tickFormatter={(v) => toFa(v / 1000000)} />
+              <BarChart
+                data={doctorEarnings.weekly}
+                margin={{ top: 8, right: 8, bottom: 0, left: -16 }}
+              >
+                <CartesianGrid
+                  strokeDasharray="3 3"
+                  stroke={chartGridColor}
+                  vertical={false}
+                />
+                <XAxis
+                  dataKey="week"
+                  tick={{ fontSize: 12, fontFamily: "Vazirmatn" }}
+                  stroke={chartAxisColor}
+                />
+                <YAxis
+                  tick={{ fontSize: 11 }}
+                  stroke={chartAxisColor}
+                  tickFormatter={(v) => toFa(v / 1000000)}
+                />
                 <Tooltip
-                  cursor={{ fill: 'rgb(var(--color-primary-500) / 0.12)' }}
-                  formatter={(v) => [formatToman(Number(v)), 'درآمد']}
+                  cursor={{ fill: "rgb(var(--color-primary-500) / 0.12)" }}
+                  formatter={(v) => [formatToman(Number(v)), "درآمد"]}
                   contentStyle={{
                     borderRadius: 12,
-                    border: '1px solid rgb(var(--color-primary-300) / 0.35)',
-                    backgroundColor: 'rgb(15 23 42 / 0.96)',
-                    color: '#f8fafc',
-                    fontFamily: 'Vazirmatn',
+                    border: "1px solid rgb(var(--color-primary-300) / 0.35)",
+                    backgroundColor: "rgb(15 23 42 / 0.96)",
+                    color: "#f8fafc",
+                    fontFamily: "Vazirmatn",
                     fontSize: 12,
                   }}
                 />
-                <Bar dataKey="amount" fill={primaryChartColor} radius={[8, 8, 0, 0]} />
+                <Bar
+                  dataKey="amount"
+                  fill={primaryChartColor}
+                  radius={[8, 8, 0, 0]}
+                />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -155,7 +242,9 @@ export default function DoctorOverview() {
           <div className="mb-4 flex items-center justify-between">
             <div>
               <h3 className="font-bold text-ink-800">برنامه امروز</h3>
-              <p className="text-xs text-ink-400">{formatDateFa(new Date().toISOString())}</p>
+              <p className="text-xs text-ink-400">
+                {formatDateFa(new Date().toISOString())}
+              </p>
             </div>
             <Link
               to="/doctor/appointments"
@@ -167,7 +256,7 @@ export default function DoctorOverview() {
 
           <div className="space-y-3">
             {today.map((a) => {
-              const pat = getPatient(a.patientId)!
+              const pat = getPatient(a.patientId)!;
               return (
                 <div
                   key={a.id}
@@ -177,22 +266,27 @@ export default function DoctorOverview() {
                     <span className="text-sm font-bold text-primary-700 tabular">
                       {toFa(a.time)}
                     </span>
-                    <span className="text-[10px] text-ink-400">دقیقه ۳۰</span>
                   </div>
                   <div className="h-10 w-px bg-white/60" />
                   <Avatar src={pat.avatar} size="sm" />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-semibold text-ink-800">{pat.name}</p>
+                    <p className="truncate font-semibold text-ink-800">
+                      {pat.name}
+                    </p>
                     <p className="truncate text-xs text-ink-400">{a.reason}</p>
                   </div>
                   <StatusBadge status={a.status} />
                   <Link to={`/doctor/consult/${a.id}`}>
-                    <PrimaryButton size="sm" variant="ghost" icon={<IconChat className="h-4 w-4" />}>
+                    <PrimaryButton
+                      size="sm"
+                      variant="ghost"
+                      icon={<IconChat className="h-4 w-4" />}
+                    >
                       شروع
                     </PrimaryButton>
                   </Link>
                 </div>
-              )
+              );
             })}
             {today.length === 0 && (
               <EmptyState
@@ -216,34 +310,38 @@ export default function DoctorOverview() {
             <div className="space-y-3">
               {[...mine]
                 .sort((a, b) => {
-                  const ta = a.createdAt || a.date
-                  const tb = b.createdAt || b.date
-                  return ta < tb ? 1 : -1
+                  const ta = a.createdAt || a.date;
+                  const tb = b.createdAt || b.date;
+                  return ta < tb ? 1 : -1;
                 })
                 .slice(0, 6)
                 .map((a) => {
-                const pat = getPatient(a.patientId)
-                if (!pat) return null
-                return (
-                  <div
-                    key={a.id}
-                    className="rounded-2xl border border-white/50 bg-white/40 p-3"
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar src={pat.avatar} size="sm" />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-semibold text-ink-800">{pat.name}</p>
-                        <p className="text-[11px] text-ink-400">
-                          {formatDateFa(a.date)} • {toFa(a.time)} • {a.reason}
-                        </p>
+                  const pat = getPatient(a.patientId);
+                  if (!pat) return null;
+                  return (
+                    <div
+                      key={a.id}
+                      className="rounded-2xl border border-white/50 bg-white/40 p-3"
+                    >
+                      <div className="flex items-center gap-3">
+                        <Avatar src={pat.avatar} size="sm" />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-semibold text-ink-800">
+                            {pat.name}
+                          </p>
+                          <p className="text-[11px] text-ink-400">
+                            {formatDateFa(a.date)} • {toFa(a.time)} • {a.reason}
+                          </p>
+                        </div>
+                        <StatusBadge status={a.status} />
                       </div>
-                      <StatusBadge status={a.status} />
                     </div>
-                  </div>
-                )
-              })}
+                  );
+                })}
               {mine.length === 0 && (
-                <p className="py-6 text-center text-sm text-ink-400">ویزیتی ثبت نشده است.</p>
+                <p className="py-6 text-center text-sm text-ink-400">
+                  ویزیتی ثبت نشده است.
+                </p>
               )}
             </div>
           </GlassCard>
@@ -254,11 +352,13 @@ export default function DoctorOverview() {
             <div className="space-y-2">
               {mine
                 .filter((a) => a.isFollowUp)
-                .sort((a, b) => (a.date + a.time).localeCompare(b.date + b.time))
+                .sort((a, b) =>
+                  (a.date + a.time).localeCompare(b.date + b.time),
+                )
                 .slice(0, 10)
                 .map((a) => {
-                  const pat = getPatient(a.patientId)
-                  if (!pat) return null
+                  const pat = getPatient(a.patientId);
+                  if (!pat) return null;
                   return (
                     <div
                       key={a.id}
@@ -268,22 +368,86 @@ export default function DoctorOverview() {
                         <IconCalendar className="h-4 w-4" />
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate text-sm font-medium text-ink-700">{pat.name}</p>
+                        <p className="truncate text-sm font-medium text-ink-700">
+                          {pat.name}
+                        </p>
                         <p className="truncate text-[11px] text-ink-400">
                           {formatDateFa(a.date)} • {toFa(a.time)} • {a.reason}
                         </p>
                       </div>
                       <StatusBadge status={a.status} />
                     </div>
-                  )
+                  );
                 })}
               {mine.filter((a) => a.isFollowUp).length === 0 && (
-                <p className="py-6 text-center text-sm text-ink-400">نوبت پیگیری ثبت نشده است.</p>
+                <p className="py-6 text-center text-sm text-ink-400">
+                  نوبت پیگیری ثبت نشده است.
+                </p>
               )}
             </div>
           </GlassCard>
         </div>
       </div>
+
+      {/* Withdrawal request modal */}
+      <Modal
+        open={withdrawOpen}
+        onClose={() => setWithdrawOpen(false)}
+        title="درخواست برداشت"
+        size="md"
+        footer={
+          <>
+            <PrimaryButton
+              onClick={handleWithdraw}
+              disabled={withdrawing}
+              icon={<IconWallet className="h-4 w-4" />}
+            >
+              {withdrawing ? "در حال ثبت…" : "ثبت درخواست"}
+            </PrimaryButton>
+            <PrimaryButton
+              variant="ghost"
+              onClick={() => setWithdrawOpen(false)}
+              disabled={withdrawing}
+            >
+              انصراف
+            </PrimaryButton>
+          </>
+        }
+      >
+        <div className="space-y-4">
+          <div className="rounded-xl border border-white/50 bg-white/40 p-4">
+            <p className="text-xs text-ink-400">موجودی قابل برداشت</p>
+            <p className="mt-1 text-lg font-bold text-ink-800 tabular">
+              {formatToman(doctorEarnings.pending)}
+            </p>
+          </div>
+          <InputField
+            label="مبلغ درخواست (تومان)"
+            name="amount"
+            dir="ltr"
+            type="number"
+            min={1000}
+            max={doctorEarnings.pending || undefined}
+            placeholder="مثلاً 500000"
+            value={withdrawAmount}
+            onChange={(e) =>
+              setWithdrawAmount(e.target.value.replace(/[^0-9]/g, ""))
+            }
+          />
+          <InputField
+            label="شماره شبا یا شماره کارت (اختیاری)"
+            name="bank"
+            dir="ltr"
+            placeholder="IR..."
+            value={withdrawBank}
+            onChange={(e) => setWithdrawBank(e.target.value)}
+          />
+          <p className="text-[11px] leading-5 text-ink-400">
+            در صورت خالی بودن شماره، مبلغ به شماره شبا ثبت‌شده در پروفایل شما
+            واریز می‌شود. درخواست پس از تأیید مدیر پردازش می‌شود.
+          </p>
+        </div>
+      </Modal>
     </div>
-  )
+  );
 }

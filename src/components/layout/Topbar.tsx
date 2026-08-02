@@ -69,6 +69,17 @@ export default function Topbar({ role, title, subtitle, onMenu }: Props) {
     }
   };
 
+  const markOneRead = async (notification: UserNotification) => {
+    setNotifications((items) =>
+      items.map((item) => item.id === notification.id ? { ...item, read: true } : item),
+    );
+    try {
+      await api.post("/notifications/mark-read/", { ids: [notification.id] });
+    } catch {
+      fetchNotifications();
+    }
+  };
+
   const openNotification = async (notification: UserNotification) => {
     if (!notification.read) {
       setNotifications((items) =>
@@ -173,22 +184,36 @@ export default function Topbar({ role, title, subtitle, onMenu }: Props) {
             </div>
             <div className="max-h-96 overflow-y-auto p-2">
               {notifications.slice(0, 12).map((notification) => (
-                <button
-                  type="button"
+                <div
                   key={notification.id}
-                  onClick={() => openNotification(notification)}
                   className={cn(
-                    "relative block w-full rounded-md px-3 py-2.5 text-right transition hover:bg-primary-50",
+                    "group relative flex w-full items-start gap-1 rounded-md px-3 py-2.5 text-right transition hover:bg-primary-50",
                     !notification.read && "bg-primary-50/70",
                   )}
                 >
                   {!notification.read && <span className="absolute right-1.5 top-4 h-2 w-2 rounded-full bg-primary-500" />}
-                  <p className="pr-2 text-sm font-semibold text-ink-800">{notification.title}</p>
-                  {notification.body && <p className="mt-1 pr-2 text-xs leading-5 text-ink-500">{notification.body}</p>}
-                  <p className="mt-1 pr-2 text-[10px] text-ink-400">
-                    {new Intl.DateTimeFormat("fa-IR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(notification.createdAt))}
-                  </p>
-                </button>
+                  <button
+                    type="button"
+                    onClick={() => openNotification(notification)}
+                    className="min-w-0 flex-1 text-right"
+                  >
+                    <p className="pr-2 text-sm font-semibold text-ink-800">{notification.title}</p>
+                    {notification.body && <p className="mt-1 pr-2 text-xs leading-5 text-ink-500">{notification.body}</p>}
+                    <p className="mt-1 pr-2 text-[10px] text-ink-400">
+                      {new Intl.DateTimeFormat("fa-IR", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }).format(new Date(notification.createdAt))}
+                    </p>
+                  </button>
+                  {!notification.read && (
+                    <button
+                      type="button"
+                      onClick={() => markOneRead(notification)}
+                      title="علامت‌گذاری به عنوان خوانده‌شده"
+                      className="grid h-7 w-7 shrink-0 place-items-center rounded-md text-ink-300 transition hover:bg-primary-100 hover:text-primary-600"
+                    >
+                      <CheckCheck className="h-4 w-4" />
+                    </button>
+                  )}
+                </div>
               ))}
               {!notifications.length && (
                 <p className="px-3 py-8 text-center text-sm text-ink-400">اعلان جدیدی وجود ندارد.</p>

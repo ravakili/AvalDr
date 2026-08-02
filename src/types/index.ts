@@ -63,9 +63,12 @@ export interface Patient extends Person {
   gender: 'male' | 'female'
   city: string
   bloodType?: string
+  dateOfBirth?: string
   insuranceType?: string
   supplementaryInsurance?: string
   emergencyContact?: { name: string; phone: string; relationship: string }
+  receiveNotifications?: boolean
+  receivePromotions?: boolean
   medicalHistory?: MedicalRecord
   suspended?: boolean
 }
@@ -112,12 +115,23 @@ export interface ChatMessage {
   fileName?: string
 }
 
+export interface SupportThread {
+  id: string
+  participantName: string
+  participantAvatar: string
+  participantRole: Role
+  participantPhone: string
+  lastMessage: string
+  messageCount: number
+  createdAt: string
+}
+
 export interface Prescription {
   id: string
   appointmentId: string
   doctorId: string
   patientId: string
-  items: { drug: string; usage: string }[]
+  items: { drug: string; usage: string; dosage?: string; duration?: string }[]
   notes: string
   createdAt: string
 }
@@ -158,6 +172,7 @@ export interface UploadingFile {
   status: 'pending' | 'uploading' | 'uploaded' | 'error'
   progress: number
   error?: string
+  file?: File
 }
 
 export interface UserData {
