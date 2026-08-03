@@ -7,6 +7,7 @@ import Badge from "../../components/ui/Badge";
 import Modal from "../../components/ui/Modal";
 import EmptyState from "../../components/ui/EmptyState";
 import InputField, { TextArea } from "../../components/ui/InputField";
+import VoiceMessage from "../../components/chat/VoiceMessage";
 import {
   IconCalendar,
   IconChat,
@@ -27,6 +28,8 @@ import {
   IconChevron,
   IconPlus,
   IconChevronRight,
+  IconClose,
+  IconTrash,
 } from "../../components/ui/icons";
 import {
   appointments,
@@ -39,6 +42,8 @@ import {
   doctors,
 } from "../../data/apiData";
 import { api } from "../../lib/api";
+import { useChatSocket } from "../../lib/useChatSocket";
+import { useVoiceRecorder, blobToBase64 } from "../../lib/useVoiceRecorder";
 import { useAuthStore } from "../../store/authStore";
 import { cn, formatDateFa, toFa, shortDateFa } from "../../lib/utils";
 import type {
@@ -95,6 +100,58 @@ export default function ChatPage() {
   const [draft, setDraft] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+
+  /* ── typing indicator ── */
+  const [typingBy, setTypingBy] = useState<string>("");
+  const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    return () => {
+      if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+    };
+  }, []);
+
+  /* ── real-time WebSocket (appointment chat only) ── */
+  const isAppointmentChat = activeId !== "" && !isAdminChat;
+  const { connected, sendText, sendVoice, sendTyping } = useChatSocket({
+    appointmentId: isAppointmentChat ? activeId : "",
+    enabled: isAppointmentChat,
+    onMessage: (msg) => {
+      setMessages((prev) => {
+        if (prev.some((m) => m.id === msg.id)) return prev;
+        return [...prev, msg];
+      });
+      if (msg.type === "voice") {
+        setLastMessages((prev) => ({ ...prev, [activeId]: "🎤 پیام صوتی" }));
+      } else if (msg.text) {
+        setLastMessages((prev) => ({ ...prev, [activeId]: msg.text }));
+      }
+    },
+    onTyping: (senderId) => {
+      if (senderId && senderId !== ME) {
+        setTypingBy(senderId);
+        if (typingTimerRef.current) clearTimeout(typingTimerRef.current);
+        typingTimerRef.current = setTimeout(() => setTypingBy(""), 2500);
+      }
+    },
+    onStatus: (payload) => {
+      if (payload.appointmentId !== activeId) return;
+      syncAppointment(activeId)
+        .then(() => setStatusTick((t) => t + 1))
+        .catch(() => {});
+    },
+  });
+
+  /* ── voice recording ── */
+  const voice = useVoiceRecorder();
+  const [sendingVoice, setSendingVoice] = useState(false);
+
+  useEffect(() => {
+    return () => voice.cancel();
+  }, [voice.cancel]);
+
+  useEffect(() => {
+    voice.cancel();
+  }, [activeId, voice.cancel]);
 
   /* ── prescription modals ── */
   const [rxOpen, setRxOpen] = useState(false);
@@ -217,14 +274,15 @@ export default function ChatPage() {
         .catch(() => {});
     fetchMessages();
     syncStatus();
-    const msgInterval = setInterval(fetchMessages, 4000);
-    const statusInterval = setInterval(syncStatus, 2000);
+    let msgInterval: ReturnType<typeof setInterval> | null = null;
+    if (!connected) {
+      msgInterval = setInterval(fetchMessages, 4000);
+    }
     return () => {
       active = false;
-      clearInterval(msgInterval);
-      clearInterval(statusInterval);
+      if (msgInterval) clearInterval(msgInterval);
     };
-  }, [activeId, isAdminChat, supportThreadId]);
+  }, [activeId, isAdminChat, supportThreadId, connected]);
 
   /* ── admin: poll support threads list ── */
   useEffect(() => {
@@ -326,11 +384,17 @@ export default function ChatPage() {
           `/chat/support/threads/${supportThreadId}/send/`,
           { text },
         );
-        setMessages((prev) => [...prev, msg]);
+        setMessages((prev) =>
+          prev.some((m) => m.id === msg.id) ? prev : [...prev, msg],
+        );
         setDraft("");
       } catch {
         /* ignore */
       }
+      return;
+    }
+    if (connected && sendText(text)) {
+      setDraft("");
       return;
     }
     try {
@@ -338,12 +402,75 @@ export default function ChatPage() {
         `/chat/appointments/${activeId}/messages/`,
         { text, type: "text" },
       );
-      setMessages((prev) => [...prev, msg]);
+      setMessages((prev) =>
+        prev.some((m) => m.id === msg.id) ? prev : [...prev, msg],
+      );
       setDraft("");
     } catch {
       /* ignore */
     }
-  }, [draft, chatClosed, isAdminChat, activeId, ME, supportThreadId]);
+  }, [
+    draft,
+    chatClosed,
+    isAdminChat,
+    activeId,
+    supportThreadId,
+    connected,
+    sendText,
+  ]);
+
+  /* ── send voice message (WS base64 → REST fallback) ── */
+  const sendVoiceMessage = async () => {
+    const rec = voice.recording;
+    if (!rec || sendingVoice) return;
+    setSendingVoice(true);
+    try {
+      const base64 = await blobToBase64(rec.blob);
+      const sentViaWs = connected && sendVoice(base64, rec.mimeType, rec.duration);
+      if (!sentViaWs) {
+        const ext = rec.mimeType.includes("ogg")
+          ? "ogg"
+          : rec.mimeType.includes("mp4")
+            ? "m4a"
+            : "webm";
+        const form = new FormData();
+        form.append("voice", rec.blob, `voice-${Date.now()}.${ext}`);
+        form.append("text", "");
+        form.append("type", "voice");
+        form.append("voice_duration", String(rec.duration));
+        const msg = await api.post<ChatMessage>(
+          `/chat/appointments/${activeId}/messages/`,
+          form,
+        );
+        setMessages((prev) =>
+          prev.some((m) => m.id === msg.id) ? prev : [...prev, msg],
+        );
+      }
+    } catch {
+      toast.error("ارسال پیام صوتی انجام نشد");
+    } finally {
+      voice.clearPreview();
+      setSendingVoice(false);
+    }
+  };
+
+  const toggleMic = () => {
+    if (voice.isRecording) {
+      voice.stop();
+    } else {
+      voice.start();
+    }
+  };
+
+  /* ── throttled typing indicator over WebSocket ── */
+  const lastTypingRef = useRef(0);
+  const emitTyping = () => {
+    if (!connected || isAdminChat) return;
+    const now = Date.now();
+    if (now - lastTypingRef.current < 1500) return;
+    lastTypingRef.current = now;
+    sendTyping();
+  };
 
   /* ── submit prescription ── */
   const submitPrescription = async () => {
@@ -694,6 +821,7 @@ export default function ChatPage() {
                 m.senderId === ME || (isAdminChat && m.senderId === ME);
               const isPrescription = m.type === "prescription";
               const isFile = m.type === "file";
+              const isVoice = m.type === "voice";
               const senderIsPatient = patient && m.senderId === patient.userId;
               const senderIsDoctor = doctor && m.senderId === doctor.userId;
               const senderIsAdmin = m.senderRole === "admin";
@@ -798,7 +926,17 @@ export default function ChatPage() {
                           <IconDownload className="h-5 w-5 shrink-0 text-primary-500" />
                         </a>
                       )}
-                      <p className="whitespace-pre-line">{m.text}</p>
+                      {isVoice && m.voiceUrl ? (
+                        <div className="py-0.5">
+                          <VoiceMessage
+                            src={m.voiceUrl}
+                            duration={m.voiceDuration}
+                            mine={mine}
+                          />
+                        </div>
+                      ) : (
+                        <p className="whitespace-pre-line">{m.text}</p>
+                      )}
                     </div>
                     <p
                       className={cn(
@@ -823,11 +961,71 @@ export default function ChatPage() {
                 </div>
               );
             })}
+
+            {/* ── Typing indicator ── */}
+            {typingBy && typingBy !== ME && (
+              <div className="flex items-center gap-1.5 text-xs text-ink-400">
+                <span className="flex items-end gap-0.5">
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-300" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-300 [animation-delay:150ms]" />
+                  <span className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink-300 [animation-delay:300ms]" />
+                </span>
+                در حال تایپ...
+              </div>
+            )}
           </div>
 
           {/* ── Composer ── */}
           {canChat && !isAdminChat && (
             <div className="border-t border-white/50 p-3">
+              {/* Recording strip */}
+              {voice.isRecording && (
+                <div className="mb-2 flex items-center gap-3 rounded-2xl bg-red-50 px-3 py-2.5">
+                  <span className="relative flex h-2.5 w-2.5 shrink-0">
+                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-red-400 opacity-75" />
+                    <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-red-500" />
+                  </span>
+                  <span className="text-sm font-medium text-red-600 tabular-nums">
+                    در حال ضبط… {toFa(String(voice.recordingTime))} ثانیه
+                  </span>
+                  <button
+                    onClick={voice.cancel}
+                    title="انصراف از ضبط"
+                    className="mr-auto grid h-8 w-8 place-items-center rounded-lg text-red-400 transition hover:bg-red-100 hover:text-red-600"
+                  >
+                    <IconTrash className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
+
+              {/* Voice preview strip */}
+              {!voice.isRecording && voice.recording && (
+                <div className="mb-2 flex items-center gap-2 rounded-2xl bg-white/50 px-3 py-2">
+                  <VoiceMessage
+                    src={voice.recording.objectUrl}
+                    duration={voice.recording.duration}
+                  />
+                  <PrimaryButton
+                    size="sm"
+                    className="mr-auto"
+                    onClick={sendVoiceMessage}
+                    disabled={sendingVoice}
+                    icon={<IconSend className="h-4 w-4" />}
+                  >
+                    {sendingVoice ? "در حال ارسال…" : "ارسال"}
+                  </PrimaryButton>
+                  <PrimaryButton
+                    variant="ghost"
+                    size="sm"
+                    className="!px-2.5"
+                    onClick={voice.clearPreview}
+                    disabled={sendingVoice}
+                    title="حذف پیام صوتی"
+                    icon={<IconClose className="h-4 w-4" />}
+                  />
+                </div>
+              )}
+
               <div className="glass-soft flex items-end gap-2 rounded-2xl p-2">
                 {isDoctor && (
                   <button
@@ -836,6 +1034,34 @@ export default function ChatPage() {
                     title="ارسال نسخه"
                   >
                     <IconPrescription />
+                  </button>
+                )}
+                {!voice.isRecording && !voice.recording && (
+                  <button
+                    onClick={toggleMic}
+                    disabled={!voice.isSupported}
+                    className={cn(
+                      "grid h-10 w-10 shrink-0 place-items-center rounded-xl transition",
+                      voice.isSupported
+                        ? "text-ink-500 hover:bg-primary-50 hover:text-primary-600"
+                        : "text-ink-300",
+                    )}
+                    title={
+                      voice.isSupported
+                        ? "ضبط پیام صوتی"
+                        : "ضبط صدا در این مرورگر پشتیبانی نمی‌شود"
+                    }
+                  >
+                    <IconMic />
+                  </button>
+                )}
+                {voice.isRecording && (
+                  <button
+                    onClick={toggleMic}
+                    className="grid h-10 w-10 shrink-0 place-items-center rounded-xl bg-red-500 text-white transition hover:bg-red-600"
+                    title="پایان ضبط"
+                  >
+                    <IconMicOff />
                   </button>
                 )}
                 <button
@@ -871,7 +1097,10 @@ export default function ChatPage() {
                 />
                 <textarea
                   value={draft}
-                  onChange={(e) => setDraft(e.target.value)}
+                  onChange={(e) => {
+                    setDraft(e.target.value);
+                    emitTyping();
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
@@ -879,14 +1108,23 @@ export default function ChatPage() {
                     }
                   }}
                   rows={1}
-                  placeholder="پیام خود را بنویسید…"
-                  className="max-h-32 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-ink-800 placeholder:text-ink-400 outline-none"
+                  disabled={voice.isRecording || !!voice.recording}
+                  placeholder={
+                    voice.isRecording
+                      ? "در حال ضبط صدا…"
+                      : voice.recording
+                        ? "برای ارسال پیام صوتی آماده‌اید"
+                        : "پیام خود را بنویسید…"
+                  }
+                  className="max-h-32 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-ink-800 placeholder:text-ink-400 outline-none disabled:opacity-60"
                 />
                 <PrimaryButton
                   size="sm"
                   className="h-10 w-10 !px-0"
                   onClick={send}
-                  disabled={!draft.trim() || chatClosed}
+                  disabled={
+                    !draft.trim() || chatClosed || voice.isRecording || !!voice.recording
+                  }
                   icon={<IconSend className="h-5 w-5" />}
                   aria-label="ارسال"
                 />

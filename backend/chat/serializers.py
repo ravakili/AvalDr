@@ -1,5 +1,7 @@
 from rest_framework import serializers
 
+from config.media_urls import absolute_media
+
 from .models import ChatMessage, SupportMessage, SupportThread
 
 
@@ -13,35 +15,41 @@ class ChatMessageSerializer(serializers.ModelSerializer):
     type = serializers.CharField(source='message_type')
     fileUrl = serializers.SerializerMethodField()
     fileName = serializers.CharField(source='file_name', required=False, allow_blank=True)
+    voiceUrl = serializers.SerializerMethodField()
+    voiceDuration = serializers.FloatField(source='voice_duration', read_only=True)
 
     class Meta:
         model = ChatMessage
         fields = (
             'id', 'senderId', 'senderName', 'senderRole', 'senderAvatar', 'text', 'time',
-            'type', 'fileUrl', 'fileName', 'file',
+            'type', 'fileUrl', 'fileName', 'file', 'voiceUrl', 'voiceDuration', 'voice',
         )
-        extra_kwargs = {'file': {'write_only': True, 'required': False}}
+        extra_kwargs = {
+            'file': {'write_only': True, 'required': False},
+            'voice': {'write_only': True, 'required': False},
+        }
         read_only_fields = ('id', 'senderId', 'time')
 
     def get_senderAvatar(self, obj):
         if not obj.sender.avatar:
             return ''
-        request = self.context.get('request')
-        url = obj.sender.avatar
-        return request.build_absolute_uri(url) if request else url
+        return absolute_media(obj.sender.avatar, self.context.get('request'))
 
     def get_fileUrl(self, obj):
         if not obj.file:
             return None
-        request = self.context.get('request')
-        url = obj.file.url
-        return request.build_absolute_uri(url) if request else url
+        return absolute_media(obj.file.url, self.context.get('request'))
+
+    def get_voiceUrl(self, obj):
+        if not obj.voice:
+            return None
+        return absolute_media(obj.voice.url, self.context.get('request'))
 
 
 def _absolute_avatar(request, avatar):
     if not avatar:
         return ''
-    return request.build_absolute_uri(avatar) if request else avatar
+    return absolute_media(avatar, request)
 
 
 class SupportMessageSerializer(serializers.ModelSerializer):

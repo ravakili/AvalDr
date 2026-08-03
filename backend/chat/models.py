@@ -8,6 +8,7 @@ class ChatMessage(models.Model):
         ('prescription', 'نسخه'),
         ('system', 'سیستمی'),
         ('file', 'فایل'),
+        ('voice', 'صوتی'),
     )
 
     appointment = models.ForeignKey('appointments.Appointment', on_delete=models.CASCADE, related_name='messages')
@@ -16,6 +17,8 @@ class ChatMessage(models.Model):
     message_type = models.CharField(max_length=12, choices=MESSAGE_TYPE_CHOICES, default='text')
     file = models.FileField(upload_to='chat_attachments/%Y/%m/', blank=True)
     file_name = models.CharField(max_length=255, blank=True)
+    voice = models.FileField(upload_to='chat_voice/%Y/%m/', blank=True)
+    voice_duration = models.FloatField(default=0)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

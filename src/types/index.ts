@@ -116,9 +116,11 @@ export interface ChatMessage {
   senderAvatar?: string
   text: string
   time: string
-  type: 'text' | 'prescription' | 'system' | 'file'
+  type: 'text' | 'prescription' | 'system' | 'file' | 'voice'
   fileUrl?: string
   fileName?: string
+  voiceUrl?: string
+  voiceDuration?: number
 }
 
 export interface SupportThread {
