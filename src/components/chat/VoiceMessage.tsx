@@ -10,10 +10,15 @@ interface VoiceMessageProps {
 }
 
 function formatTime(seconds: number): string {
-  const s = Math.max(0, Math.floor(seconds))
-  const m = Math.floor(s / 60)
-  const r = s % 60
-  return `${toFa(m)}:${toFa(String(r).padStart(2, "0"))}`
+  const totalSeconds = Math.max(0, seconds)
+  const m = Math.floor(totalSeconds / 60)
+  const s = Math.floor(totalSeconds % 60)
+  const ms = Math.floor((totalSeconds % 1) * 10)
+  
+  if (ms > 0) {
+    return `${toFa(m)}:${toFa(String(s).padStart(2, "0"))}.${toFa(ms)}`
+  }
+  return `${toFa(m)}:${toFa(String(s).padStart(2, "0"))}`
 }
 
 export default function VoiceMessage({
@@ -27,27 +32,43 @@ export default function VoiceMessage({
   const [current, setCurrent] = useState(0)
   const [loadedDuration, setLoadedDuration] = useState<number | null>(null)
 
-  const total = loadedDuration ?? duration ?? 0
+  // Use the prop duration if available, otherwise use loaded duration
+  const total = duration ?? loadedDuration ?? 0
   const progress = total > 0 ? Math.min(1, current / total) : 0
 
   useEffect(() => {
     const audio = audioRef.current
     if (!audio) return
+    
     const onTime = () => setCurrent(audio.currentTime)
-    const onMeta = () => setLoadedDuration(audio.duration || null)
+    const onMeta = () => {
+      // Only use audio.duration if duration prop is not provided
+      if (!duration && audio.duration) {
+        setLoadedDuration(audio.duration)
+      }
+    }
     const onEnded = () => {
       setPlaying(false)
       setCurrent(0)
     }
+    
     audio.addEventListener("timeupdate", onTime)
     audio.addEventListener("loadedmetadata", onMeta)
     audio.addEventListener("ended", onEnded)
+    
     return () => {
       audio.removeEventListener("timeupdate", onTime)
       audio.removeEventListener("loadedmetadata", onMeta)
       audio.removeEventListener("ended", onEnded)
     }
-  }, [])
+  }, [duration]) // Re-run if duration changes
+
+  // Reset when src changes
+  useEffect(() => {
+    setCurrent(0)
+    setPlaying(false)
+    setLoadedDuration(null)
+  }, [src])
 
   useEffect(() => {
     return () => {
@@ -58,10 +79,12 @@ export default function VoiceMessage({
   const toggle = () => {
     const audio = audioRef.current
     if (!audio) return
+    
     if (playing) {
       audio.pause()
       setPlaying(false)
     } else {
+      // If we have a duration prop, we can seek if needed
       audio.play()
       setPlaying(true)
     }
@@ -69,7 +92,13 @@ export default function VoiceMessage({
 
   return (
     <div className="flex items-center gap-2">
-      <audio ref={audioRef} src={src} preload="metadata" />
+      <audio 
+        ref={audioRef} 
+        src={src} 
+        preload="metadata"
+        // If duration is provided, we can set it as a data attribute for debugging
+        data-duration={duration}
+      />
       <button
         onClick={toggle}
         aria-label={playing ? "توقف" : "پخش"}
@@ -90,7 +119,7 @@ export default function VoiceMessage({
               "h-full rounded-full transition-[width] duration-150",
               mine ? "bg-white/80" : "bg-primary-500",
             )}
-            style={{ width: `${Math.max(8, progress * 100)}%` }}
+            style={{ width: `${progress * 100}%` }}
           />
         </div>
         <span
