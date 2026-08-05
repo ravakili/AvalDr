@@ -3,6 +3,9 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.response import Response
 
+from asgiref.sync import async_to_sync
+from channels.layers import get_channel_layer
+
 from appointments.models import Appointment
 from config.permissions import IsActiveUser
 from notifications.services import notify, notify_admins
@@ -50,7 +53,7 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
                 notify(
                     recipient,
                     f'پیام جدید از {request.user.display_name}',
-                    message.text[:160],
+                    message.text[:160] or 'پیام صوتی جدید',
                     'message',
                     {'appointmentId': str(appointment.pk), 'senderId': str(request.user.pk)},
                 )
@@ -154,6 +157,17 @@ class SupportThreadViewSet(viewsets.GenericViewSet):
                 f'{request.user.display_name}: {text[:160]}',
                 'message',
                 {'supportThreadId': str(thread.pk)},
+            )
+        channel_layer = get_channel_layer()
+        if channel_layer:
+            async_to_sync(channel_layer.group_send)(
+                f'support_{thread.pk}',
+                {
+                    'type': 'chat_message',
+                    'message': SupportMessageSerializer(
+                        message, context={'request': request}
+                    ).data,
+                },
             )
         return Response(
             SupportMessageSerializer(message, context={'request': request}).data,

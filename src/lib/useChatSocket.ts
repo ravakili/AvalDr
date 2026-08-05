@@ -23,6 +23,7 @@ export type WsMessageEvent =
 
 interface UseChatSocketOptions {
   appointmentId: string
+  threadId?: string
   enabled?: boolean
   onMessage: (msg: ChatMessage) => void
   onTyping?: (senderId: string) => void
@@ -38,6 +39,7 @@ function baseWsUrl(): string {
 
 export function useChatSocket({
   appointmentId,
+  threadId = "",
   enabled = true,
   onMessage,
   onTyping,
@@ -89,7 +91,7 @@ export function useChatSocket({
   useEffect(() => {
     setConnected(false)
     retryRef.current = 0
-    if (!enabled || !appointmentId) {
+    if (!enabled || (!appointmentId && !threadId)) {
       closedByUserRef.current = true
       return
     }
@@ -100,7 +102,10 @@ export function useChatSocket({
     const connect = () => {
       if (disposed || closedByUserRef.current) return
       const token = getApiTokens()?.access
-      const url = `${baseWsUrl()}/ws/consult/${appointmentId}/chat/?token=${encodeURIComponent(token || "")}`
+      const path = threadId
+        ? `/ws/support/${threadId}/chat/`
+        : `/ws/consult/${appointmentId}/chat/`
+      const url = `${baseWsUrl()}${path}?token=${encodeURIComponent(token || "")}`
       let ws: WebSocket
       try {
         ws = new WebSocket(url)
@@ -166,7 +171,7 @@ export function useChatSocket({
       setConnected(false)
       handlersRef.current.onStatusChange?.(false)
     }
-  }, [appointmentId, enabled])
+  }, [appointmentId, threadId, enabled])
 
   return { connected, sendText, sendVoice, sendTyping, close }
 }

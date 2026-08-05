@@ -189,6 +189,11 @@ def test_booking_payment_consultation_chat_and_prescription(settings, patient, d
     )
     assert message.status_code == 201
     assert message.data['senderId'] == str(patient.pk)
+    assert Notification.objects.filter(
+        user=doctor.user,
+        type='message',
+        data__appointmentId=str(appointment_id),
+    ).exists()
 
     prescription = doctor_client.post(
         '/api/v1/prescriptions/',

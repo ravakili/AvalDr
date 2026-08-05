@@ -146,6 +146,9 @@ MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
 SITE_BASE_URL = os.getenv('SITE_BASE_URL', '').rstrip('/')
+VAPID_PUBLIC_KEY = os.getenv('VAPID_PUBLIC_KEY', '')
+VAPID_PRIVATE_KEY = os.getenv('VAPID_PRIVATE_KEY', '')
+VAPID_SUBJECT = os.getenv('VAPID_SUBJECT', 'mailto:no-reply@avaldr.local')
 
 CORS_ALLOW_ALL_ORIGINS = True
 

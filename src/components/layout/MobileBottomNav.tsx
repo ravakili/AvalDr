@@ -47,7 +47,7 @@ export default function MobileBottomNav({ role }: Props) {
     <nav
       ref={containerRef}
       className={cn(
-        "glass fixed bg-primary-500/20 inset-x-3 bottom-3 z-30 flex items-stretch justify-around",
+        "glass fixed bg-primary-50/20 inset-x-3 bottom-3 z-30 flex items-stretch justify-around",
         "rounded-full p-1.5 shadow-glass-sm lg:hidden",
       )}
     >
@@ -73,7 +73,7 @@ export default function MobileBottomNav({ role }: Props) {
             className={cn(
               "relative flex flex-1 flex-col items-center gap-1 rounded-full py-2",
               "text-[10px] font-medium transition-colors duration-200",
-              isActive ? "text-white" : "text-ink-700 dark:text-ink-200",
+              isActive ? "text-white" : "text-ink-700 ",
             )}
           >
             <motion.span

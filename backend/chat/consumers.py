@@ -1,11 +1,14 @@
 import base64
 import json
+import logging
 
 from channels.db import database_sync_to_async
 from channels.generic.websocket import AsyncWebsocketConsumer
 from django.core.files.base import ContentFile
 
 from config.media_urls import absolute_media
+
+logger = logging.getLogger(__name__)
 
 
 class AppointmentConsumer(AsyncWebsocketConsumer):
@@ -99,6 +102,12 @@ class ChatConsumer(AppointmentConsumer):
         await self.channel_layer.group_send(
             self.room_group, {'type': 'chat_message', 'message': payload}
         )
+        try:
+            await self.notify_recipient(message)
+        except Exception:
+            # A notification failure must not make a successfully stored chat
+            # message look like it failed.
+            logger.exception('chat notification failed for message %s', message.id)
 
     def build_payload(self, message):
         avatar = ''
@@ -175,6 +184,151 @@ class ChatConsumer(AppointmentConsumer):
         )
         message.voice.save(f'voice-{message.id}.{ext}', ContentFile(payload), save=True)
         return message
+
+    @database_sync_to_async
+    def notify_recipient(self, message):
+        from notifications.services import notify
+
+        appointment = message.appointment
+        if message.sender_id == appointment.patient_id:
+            recipient = appointment.doctor.user
+        else:
+            recipient = appointment.patient
+
+        notify(
+            recipient,
+            f'پیام جدید از {message.sender.display_name}',
+            message.text[:160] or 'پیام صوتی جدید',
+            'message',
+            {
+                'appointmentId': str(appointment.pk),
+                'senderId': str(message.sender_id),
+            },
+        )
+
+
+class SupportConsumer(AsyncWebsocketConsumer):
+    group_prefix = 'support'
+
+    async def connect(self):
+        self.thread_id = self.scope['url_route']['kwargs']['thread_id']
+        if not await self.can_access_thread():
+            await self.close(code=4403)
+            return
+        host = ''
+        for key, value in self.scope.get('headers', []):
+            if key == b'host':
+                host = value.decode()
+                break
+        self.request_host = host
+        self.room_group = f'{self.group_prefix}_{self.thread_id}'
+        await self.channel_layer.group_add(self.room_group, self.channel_name)
+        await self.accept()
+
+    async def disconnect(self, close_code):
+        if hasattr(self, 'room_group'):
+            await self.channel_layer.group_discard(self.room_group, self.channel_name)
+
+    @database_sync_to_async
+    def can_access_thread(self):
+        from chat.models import SupportThread
+
+        user = self.scope.get('user')
+        if not user or not user.is_authenticated:
+            return False
+        thread = SupportThread.objects.filter(pk=self.thread_id).first()
+        return bool(thread and (user.role == 'admin' or thread.participant_id == user.pk))
+
+    async def receive(self, text_data=None, bytes_data=None):
+        try:
+            data = json.loads(text_data or '{}')
+        except json.JSONDecodeError:
+            await self.close(code=4400)
+            return
+
+        action = data.get('action')
+        if action == 'typing':
+            await self.channel_layer.group_send(
+                self.room_group,
+                {
+                    'type': 'typing_event',
+                    'sender': self.channel_name,
+                    'senderId': str(self.scope['user'].id),
+                },
+            )
+            return
+
+        message = await self.create_message(data)
+        payload = self.build_payload(message)
+        await self.channel_layer.group_send(
+            self.room_group, {'type': 'chat_message', 'message': payload}
+        )
+        try:
+            await self.notify_recipient(message)
+        except Exception:
+            logger.exception('support chat notification failed for message %s', message.id)
+
+    def build_payload(self, message):
+        avatar = ''
+        if message.sender.avatar:
+            avatar = absolute_media(
+                message.sender.avatar.url if hasattr(message.sender.avatar, 'url') else message.sender.avatar,
+                request_host=self.request_host,
+            )
+        return {
+            'id': str(message.id),
+            'senderId': str(message.sender_id),
+            'senderName': message.sender.display_name,
+            'senderRole': message.sender.role,
+            'senderAvatar': avatar,
+            'text': message.text,
+            'type': 'text',
+            'time': message.created_at.isoformat(),
+            'fileUrl': None,
+            'fileName': '',
+            'voiceUrl': None,
+            'voiceDuration': 0,
+        }
+
+    async def chat_message(self, event):
+        await self.send(text_data=json.dumps({'event': 'message', 'message': event['message']}))
+
+    async def typing_event(self, event):
+        if event['sender'] != self.channel_name:
+            await self.send(
+                text_data=json.dumps({'event': 'typing', 'senderId': event['senderId']})
+            )
+
+    @database_sync_to_async
+    def create_message(self, data):
+        from chat.models import SupportMessage
+
+        return SupportMessage.objects.create(
+            thread_id=self.thread_id,
+            sender=self.scope['user'],
+            text=(data.get('text') or '').strip(),
+        )
+
+    @database_sync_to_async
+    def notify_recipient(self, message):
+        from notifications.services import notify, notify_admins
+
+        thread = message.thread
+        if message.sender_id == thread.participant_id:
+            notify_admins(
+                'پیام جدید پشتیبانی',
+                f'{message.sender.display_name}: {message.text[:160]}',
+                'message',
+                {'supportThreadId': str(thread.pk)},
+            )
+        else:
+            notify(
+                thread.participant,
+                'پیام جدید از پشتیبانی',
+                message.text[:160],
+                'message',
+                {'supportThreadId': str(thread.pk)},
+            )
 
 
 class NotificationConsumer(AsyncWebsocketConsumer):

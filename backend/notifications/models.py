@@ -38,3 +38,19 @@ class NotificationPreference(models.Model):
 
     def __str__(self):
         return f'{self.patient} - {self.label}: {self.enabled}'
+
+
+class PushSubscription(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='push_subscriptions')
+    endpoint = models.TextField(unique=True)
+    keys_p256dh = models.CharField(max_length=256)
+    keys_auth = models.CharField(max_length=256)
+    user_agent = models.CharField(max_length=256, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'push_subscriptions'
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f'{self.user} - {self.endpoint[:60]}'

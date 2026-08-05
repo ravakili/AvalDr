@@ -110,11 +110,12 @@ export default function ChatPage() {
     };
   }, []);
 
-  /* ── real-time WebSocket (appointment chat only) ── */
+  /* ── real-time WebSocket (appointment + support chat) ── */
   const isAppointmentChat = activeId !== "" && !isAdminChat;
   const { connected, sendText, sendVoice, sendTyping } = useChatSocket({
     appointmentId: isAppointmentChat ? activeId : "",
-    enabled: isAppointmentChat,
+    threadId: isAdminChat ? supportThreadId : "",
+    enabled: isAppointmentChat || isAdminChat,
     onMessage: (msg) => {
       setMessages((prev) => {
         if (prev.some((m) => m.id === msg.id)) return prev;
@@ -210,7 +211,7 @@ export default function ChatPage() {
     (a) => a.status === "completed" || a.status === "cancelled",
   );
 
-  /* ── fetch messages + appointment status ── */
+  /* ── fetch messages (support: one-time history; live updates via WS) ── */
   useEffect(() => {
     if (!activeId) {
       setMessages([]);
@@ -218,9 +219,7 @@ export default function ChatPage() {
     }
     if (isAdminChat) {
       let active = true;
-      let threadId = supportThreadId;
-      const loadMessages = () => {
-        if (!threadId) return;
+      const loadMessages = (threadId: string) => {
         api
           .get<ChatMessage[]>(`/chat/support/threads/${threadId}/messages/`)
           .then((msgs) => {
@@ -228,27 +227,21 @@ export default function ChatPage() {
           })
           .catch(() => {});
       };
-      const init = async () => {
-        if (threadId) {
-          loadMessages();
-        } else if (activeId === ADMIN_CONVERSATION_ID) {
-          try {
-            const thread = await api.post<SupportThread>(
-              "/chat/support/threads/",
-            );
-            threadId = thread.id;
-            setMySupportThreadId(thread.id);
-            loadMessages();
-          } catch {
-            /* ignore */
-          }
-        }
-      };
-      init();
-      const interval = setInterval(loadMessages, 4000);
+      if (supportThreadId) {
+        loadMessages(supportThreadId);
+      } else if (activeId === ADMIN_CONVERSATION_ID) {
+        api
+          .post<SupportThread>("/chat/support/threads/")
+          .then((thread) => {
+            if (active) {
+              setMySupportThreadId(thread.id);
+              loadMessages(thread.id);
+            }
+          })
+          .catch(() => {});
+      }
       return () => {
         active = false;
-        clearInterval(interval);
       };
     }
     let active = true;
@@ -379,6 +372,10 @@ export default function ChatPage() {
     if (!text || chatClosed) return;
     if (isAdminChat) {
       if (!supportThreadId) return;
+      if (connected && sendText(text)) {
+        setDraft("");
+        return;
+      }
       try {
         const msg = await api.post<ChatMessage>(
           `/chat/support/threads/${supportThreadId}/send/`,
@@ -423,10 +420,16 @@ export default function ChatPage() {
   const sendVoiceMessage = async () => {
     const rec = voice.recording;
     if (!rec || sendingVoice) return;
+    if (isAdminChat) {
+      toast.info("در گفتگوی پشتیبانی فقط پیام متنی ارسال می‌شود");
+      voice.clearPreview();
+      return;
+    }
     setSendingVoice(true);
     try {
       const base64 = await blobToBase64(rec.blob);
-      const sentViaWs = connected && sendVoice(base64, rec.mimeType, rec.duration);
+      const sentViaWs =
+        connected && sendVoice(base64, rec.mimeType, rec.duration);
       if (!sentViaWs) {
         const ext = rec.mimeType.includes("ogg")
           ? "ogg"
@@ -465,7 +468,7 @@ export default function ChatPage() {
   /* ── throttled typing indicator over WebSocket ── */
   const lastTypingRef = useRef(0);
   const emitTyping = () => {
-    if (!connected || isAdminChat) return;
+    if (!connected) return;
     const now = Date.now();
     if (now - lastTypingRef.current < 1500) return;
     lastTypingRef.current = now;
@@ -617,7 +620,7 @@ export default function ChatPage() {
                   <div>
                     <h2 className="font-bold text-ink-800">پشتیبانی</h2>
                     <p className="text-[11px] text-ink-400">
-                      پاسخگویی ۲۴ ساعته
+                      پاسخگویی در اسرع وقت
                     </p>
                   </div>
                 </div>
@@ -887,7 +890,7 @@ export default function ChatPage() {
                           ? "border border-primary-200 bg-primary-50/90 text-ink-800 cursor-pointer hover:bg-primary-100/90"
                           : mine
                             ? "rounded-tr-sm bg-primary-500 text-white"
-                            : "rounded-tl-sm bg-white/80 text-ink-800",
+                            : "rounded-tl-sm bg-white/80 text-ink-800 ",
                       )}
                       onClick={
                         isPrescription && !isAdminChat
@@ -919,7 +922,7 @@ export default function ChatPage() {
                             <p className="truncate text-sm font-medium text-ink-800">
                               {m.fileName || "فایل"}
                             </p>
-                            <p className="text-[11px] text-ink-400">
+                            <p className="text-[11px] text-ink-600">
                               برای دانلود کلیک کنید
                             </p>
                           </div>
@@ -940,7 +943,7 @@ export default function ChatPage() {
                     </div>
                     <p
                       className={cn(
-                        "mt-1 text-[10px] text-ink-400",
+                        "mt-1 mx-1 text-[10px] text-ink-400",
                         isAdmin && !isAdminChat
                           ? senderIsPatient || senderIsAdmin
                             ? "text-left"
@@ -950,12 +953,16 @@ export default function ChatPage() {
                             : "text-right",
                       )}
                     >
-                      {m.senderName && (
+                      {/* {m.senderName && (
                         <span className="ml-1 font-medium text-ink-500">
                           {m.senderName}
                         </span>
-                      )}
-                      {m.time}
+                      )} */}
+                      {m.time
+                        ? m.time
+                            .substring(11, 16)
+                            .replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)])
+                        : ""}
                     </p>
                   </div>
                 </div>
@@ -1116,14 +1123,17 @@ export default function ChatPage() {
                         ? "برای ارسال پیام صوتی آماده‌اید"
                         : "پیام خود را بنویسید…"
                   }
-                  className="max-h-32 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-ink-800 placeholder:text-ink-400 outline-none disabled:opacity-60"
+                  className="max-h-32 flex-1 resize-none bg-transparent px-2 py-2 text-sm text-ink-800 placeholder:text-ink-400 focus:outline-none outline-none disabled:opacity-60"
                 />
                 <PrimaryButton
                   size="sm"
                   className="h-10 w-10 !px-0"
                   onClick={send}
                   disabled={
-                    !draft.trim() || chatClosed || voice.isRecording || !!voice.recording
+                    !draft.trim() ||
+                    chatClosed ||
+                    voice.isRecording ||
+                    !!voice.recording
                   }
                   icon={<IconSend className="h-5 w-5" />}
                   aria-label="ارسال"

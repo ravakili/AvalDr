@@ -3,6 +3,7 @@ import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 import MobileBottomNav from "./MobileBottomNav";
+import PushSetup from "../PushSetup";
 import type { Role } from "../../types";
 import { useBackendData } from "../../data/apiData";
 import { useAuthStore } from "../../store/authStore";
@@ -94,6 +95,7 @@ export default function DashboardLayout({ role }: Props) {
 
   return (
     <div className="flex min-h-screen gap-5 p-4 lg:p-6">
+      <PushSetup />
       {/* Sidebar (desktop) */}
       <div className="sticky top-6 hidden h-[calc(100vh-3rem)] shrink-0 lg:block">
         <Sidebar role={role} />
