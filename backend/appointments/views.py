@@ -46,7 +46,26 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         return AppointmentCreateSerializer if self.action == 'create' else AppointmentSerializer
 
     def perform_create(self, serializer):
-        serializer.save()
+        appointment = serializer.save()
+        request = self.request
+        if (
+            appointment.is_follow_up
+            and request.user.role in ('doctor', 'admin')
+            and appointment.patient_id != request.user.pk
+        ):
+            try:
+                notify(
+                    appointment.patient,
+                    'نوبت پیگیری ثبت شد',
+                    (
+                        f'پزشک {appointment.doctor.user.display_name} نوبت پیگیری شما را '
+                        f'در {appointment.date} ثبت کرد. برای فعال‌سازی آن پرداخت کنید.'
+                    ),
+                    'appointment',
+                    {'appointmentId': str(appointment.pk)},
+                )
+            except Exception:
+                pass
 
     def create(self, request, *args, **kwargs):
         serializer = self.get_serializer(data=request.data)

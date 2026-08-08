@@ -40,6 +40,28 @@ export default function PatientManagement() {
   const [fuDateStr, setFuDateStr] = useState('')
   const [fuTime, setFuTime] = useState('')
   const [fuNote, setFuNote] = useState('')
+  const [fuType, setFuType] = useState('video')
+
+  const fuMe = doctors.find((d) => d.id === ME)
+  const followUpTypeOptions = (
+    [
+      { value: 'chat', label: 'متنی' },
+      { value: 'audio', label: 'صوتی' },
+      { value: 'video', label: 'تصویری' },
+    ] as const
+  ).filter((t) => {
+    const conf = fuMe?.communication?.[t.value]
+    return conf ? conf.enabled : true
+  })
+
+  useEffect(() => {
+    if (
+      followUpTypeOptions.length &&
+      !followUpTypeOptions.some((t) => t.value === fuType)
+    ) {
+      setFuType(followUpTypeOptions[0].value)
+    }
+  }, [followUpTypeOptions, fuType])
 
   useEffect(() => {
     refreshBackendData('doctor').catch(() => {})
@@ -79,7 +101,11 @@ export default function PatientManagement() {
     const booked = appointments
       .filter((a) => a.doctorId === ME && a.date === fuDateStr)
       .map((a) => a.time)
-    return slots.filter((s) => !booked.includes(s))
+    const isToday = fuDateStr === new Date().toISOString().split('T')[0]
+    const nowTime = new Date().toTimeString().slice(0, 5)
+    return slots.filter(
+      (s) => !booked.includes(s) && (!isToday || s >= nowTime),
+    )
   }, [fuDateStr, me])
 
   return (
@@ -283,7 +309,7 @@ export default function PatientManagement() {
                   date: fuDateStr,
                   time: fuTime,
                   reason: fuNote || 'نوبت پیگیری',
-                  consultType: 'video',
+                  consultType: fuType,
                   paymentStatus: 'pending',
                   isFollowUp: true,
                 })
@@ -312,6 +338,22 @@ export default function PatientManagement() {
           تاریخ و ساعت پیگیری را از روی ساعات کاری خود انتخاب کنید.
         </p>
         <div className="space-y-4">
+          <div>
+            <label className="mb-1.5 block text-sm font-medium text-ink-700">
+              نوع نوبت
+            </label>
+            <select
+              value={fuType}
+              onChange={(e) => setFuType(e.target.value)}
+              className="glass-input w-full rounded-xl px-4 py-2.5 text-sm text-ink-800 outline-none focus:ring-2 focus:ring-primary-200"
+            >
+              {followUpTypeOptions.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.label}
+                </option>
+              ))}
+            </select>
+          </div>
           <div>
             <label className="mb-1.5 block text-sm font-medium text-ink-700">تاریخ (شمسی)</label>
             <DatePicker

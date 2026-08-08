@@ -1,8 +1,10 @@
 from datetime import date
 
 from rest_framework import serializers
+from rest_framework.exceptions import PermissionDenied
 from drf_spectacular.utils import extend_schema_field
 
+from accounts.models import User
 from accounts.serializers import PatientProfileSerializer
 from doctors.models import DoctorProfile
 from doctors.models import CommunicationSetting
@@ -50,10 +52,15 @@ class AppointmentCreateSerializer(serializers.ModelSerializer):
     )
     endTime = serializers.TimeField(source='end_time', required=False, allow_null=True)
     consultType = serializers.ChoiceField(source='consult_type', choices=Appointment.CONSULT_CHOICES)
+    patientId = serializers.IntegerField(required=False, allow_null=True, write_only=True)
+    isFollowUp = serializers.BooleanField(required=False, default=False, write_only=True)
 
     class Meta:
         model = Appointment
-        fields = ('doctorId', 'date', 'time', 'endTime', 'reason', 'consultType')
+        fields = (
+            'doctorId', 'date', 'time', 'endTime', 'reason', 'consultType',
+            'patientId', 'isFollowUp',
+        )
 
     def validate_date(self, value):
         if value < date.today():
@@ -62,14 +69,40 @@ class AppointmentCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, attrs):
         expire_stale_pending_payments()
+        user = self.context['request'].user
         doctor = attrs['doctor']
         consult_type = attrs['consult_type']
-        try:
-            communication = doctor.comm_settings
-        except CommunicationSetting.DoesNotExist:
-            communication = None
-        if communication and not getattr(communication, f'{consult_type}_enabled'):
-            raise serializers.ValidationError({'consultType': 'این روش مشاوره فعال نیست.'})
+        is_follow_up = attrs.get('isFollowUp', False)
+        patient_id = attrs.get('patientId')
+
+        # Only a doctor or the admin may create an appointment for someone else
+        # (the follow-up flow). Patients always book for themselves.
+        is_moderated = user.role in ('doctor', 'admin')
+        if patient_id and not is_moderated:
+            raise PermissionDenied('فقط پزشک یا ادمین می‌تواند نوبت پیگیری ثبت کند.')
+
+        if is_follow_up and patient_id and is_moderated:
+            try:
+                attrs['patient'] = User.objects.get(patient_profile__pk=patient_id)
+            except User.DoesNotExist:
+                raise serializers.ValidationError({'patientId': 'بیمار یافت نشد.'})
+        elif patient_id and not is_follow_up:
+            # doctor/admin manually creating a normal appointment for a patient
+            try:
+                attrs['patient'] = User.objects.get(patient_profile__pk=patient_id)
+            except User.DoesNotExist:
+                raise serializers.ValidationError({'patientId': 'بیمار یافت نشد.'})
+
+        # A doctor/admin creating a follow-up has already decided on the method,
+        # so the enabled-flag guard is not needed (it would otherwise block booking).
+        if not is_follow_up or not is_moderated:
+            try:
+                communication = doctor.comm_settings
+            except CommunicationSetting.DoesNotExist:
+                communication = None
+            if communication and not getattr(communication, f'{consult_type}_enabled'):
+                raise serializers.ValidationError({'consultType': 'این روش مشاوره فعال نیست.'})
+
         if Appointment.objects.filter(
             doctor=doctor,
             date=attrs['date'],
@@ -80,9 +113,12 @@ class AppointmentCreateSerializer(serializers.ModelSerializer):
         return attrs
 
     def create(self, validated_data):
+        patient = validated_data.pop('patient', None) or self.context['request'].user
+        is_follow_up = validated_data.pop('isFollowUp', False)
         return Appointment.objects.create(
-            patient=self.context['request'].user,
+            patient=patient,
             status='pending-payment',
+            is_follow_up=is_follow_up,
             **validated_data,
         )
 

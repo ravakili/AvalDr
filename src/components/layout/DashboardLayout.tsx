@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 import { Outlet, useLocation } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
@@ -88,6 +88,15 @@ export default function DashboardLayout({ role }: Props) {
   const backendVersion = useBackendData(role);
   const user = useAuthStore((s) => s.user);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(
+    () => localStorage.getItem("sidebar-collapsed") === "1",
+  );
+  const toggleSidebar = useCallback(() => {
+    setSidebarCollapsed((collapsed) => {
+      localStorage.setItem("sidebar-collapsed", collapsed ? "0" : "1");
+      return !collapsed;
+    });
+  }, []);
   const { pathname } = useLocation();
 
   // Match the longest prefix we know about (handles nested routes like /user/book/:id)
@@ -109,7 +118,11 @@ export default function DashboardLayout({ role }: Props) {
       <PushSetup />
       {/* Sidebar (desktop) */}
       <div className="sticky top-6 hidden h-[calc(100vh-3rem)] shrink-0 lg:block">
-        <Sidebar role={role} />
+        <Sidebar
+          role={role}
+          collapsed={sidebarCollapsed}
+          onToggle={toggleSidebar}
+        />
       </div>
 
 

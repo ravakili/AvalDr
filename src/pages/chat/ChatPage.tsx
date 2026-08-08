@@ -30,6 +30,7 @@ import {
   IconChevronRight,
   IconClose,
   IconTrash,
+  IconEdit,
 } from "../../components/ui/icons";
 import {
   appointments,
@@ -101,6 +102,21 @@ export default function ChatPage() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
+  /* ── message edit / delete ── */
+  const [editingId, setEditingId] = useState("");
+  const [editingText, setEditingText] = useState("");
+  const [menuId, setMenuId] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState("");
+  const canModify = useCallback(
+    (m: ChatMessage) => {
+      if (isAdminChat) return m.senderId === ME || isAdmin;
+      if (m.type === "prescription" || m.type === "system")
+        return isAdmin || (isDoctor && !!activeAppt);
+      return isAdmin || isDoctor || m.senderId === ME;
+    },
+    [isAdminChat, isAdmin, isDoctor, ME, activeAppt],
+  );
+
   /* ── typing indicator ── */
   const [typingBy, setTypingBy] = useState<string>("");
   const typingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -112,7 +128,14 @@ export default function ChatPage() {
 
   /* ── real-time WebSocket (appointment + support chat) ── */
   const isAppointmentChat = activeId !== "" && !isAdminChat;
-  const { connected, sendText, sendVoice, sendTyping } = useChatSocket({
+  const {
+    connected,
+    sendText,
+    sendVoice,
+    sendTyping,
+    editMessage,
+    deleteMessage,
+  } = useChatSocket({
     appointmentId: isAppointmentChat ? activeId : "",
     threadId: isAdminChat ? supportThreadId : "",
     enabled: isAppointmentChat || isAdminChat,
@@ -139,6 +162,17 @@ export default function ChatPage() {
       syncAppointment(activeId)
         .then(() => setStatusTick((t) => t + 1))
         .catch(() => {});
+    },
+    onMessageEdited: (msg) => {
+      setMessages((prev) =>
+        prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)),
+      );
+      setLastMessages((prev) =>
+        msg.text ? { ...prev, [activeId]: msg.text } : prev,
+      );
+    },
+    onMessageDeleted: (messageId) => {
+      setMessages((prev) => prev.filter((m) => m.id !== messageId));
     },
   });
 
@@ -473,6 +507,65 @@ export default function ChatPage() {
     if (now - lastTypingRef.current < 1500) return;
     lastTypingRef.current = now;
     sendTyping();
+  };
+
+  /* ── edit / delete message (WS → REST fallback) ── */
+  const messageDetailUrl = (messageId: string) =>
+    isAdminChat
+      ? `/chat/support/threads/${supportThreadId}/messages/${messageId}/`
+      : `/chat/appointments/${activeId}/messages/${messageId}/`;
+
+  const saveEdit = async (id: string) => {
+    const text = editingText.trim();
+    if (!text) {
+      setEditingId("");
+      return;
+    }
+    const apply = (msg: ChatMessage) => {
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, ...msg } : m)));
+    };
+    if (connected && editMessage(id, text)) {
+      setEditingId("");
+      setEditingText("");
+      return;
+    }
+    try {
+      const msg = await api.patch<ChatMessage>(messageDetailUrl(id), { text });
+      apply(msg);
+      setEditingId("");
+      setEditingText("");
+    } catch {
+      toast.error("ویرایش پیام انجام نشد");
+    }
+  };
+
+  const removeMessage = async (id: string) => {
+    const apply = () => {
+      setMessages((prev) => prev.filter((m) => m.id !== id));
+      setConfirmDeleteId("");
+    };
+    if (connected && deleteMessage(id)) {
+      apply();
+      return;
+    }
+    try {
+      await api.delete<never>(messageDetailUrl(id));
+      apply();
+    } catch {
+      toast.error("حذف پیام انجام نشد");
+      setConfirmDeleteId("");
+    }
+  };
+
+  const startEdit = (m: ChatMessage) => {
+    setMenuId("");
+    setEditingId(m.id);
+    setEditingText(m.text || "");
+  };
+
+  const cancelEdit = () => {
+    setEditingId("");
+    setEditingText("");
   };
 
   /* ── submit prescription ── */
@@ -937,20 +1030,43 @@ export default function ChatPage() {
                             mine={mine}
                           />
                         </div>
+                      ) : editingId === m.id ? (
+                        <div onClick={(e) => e.stopPropagation()}>
+                          <textarea
+                            value={editingText}
+                            onChange={(e) => setEditingText(e.target.value)}
+                            rows={2}
+                            autoFocus
+                            dir="auto"
+                            className="w-full resize-none rounded-xl border border-primary-200 bg-white p-2 text-sm text-ink-800 outline-none focus:ring-2 focus:ring-primary-300"
+                          />
+                          <div className="mt-2 flex items-center justify-end gap-2">
+                            <PrimaryButton
+                              size="sm"
+                              variant="ghost"
+                              onClick={cancelEdit}
+                            >
+                              انصراف
+                            </PrimaryButton>
+                            <PrimaryButton size="sm" onClick={() => saveEdit(m.id)}>
+                              ذخیره
+                            </PrimaryButton>
+                          </div>
+                        </div>
                       ) : (
                         <p className="whitespace-pre-line">{m.text}</p>
                       )}
                     </div>
                     <p
                       className={cn(
-                        "mt-1 mx-1 text-[10px] text-ink-400",
+                        "mt-1 mx-1 flex items-center gap-1 text-[10px] text-ink-400",
                         isAdmin && !isAdminChat
                           ? senderIsPatient || senderIsAdmin
-                            ? "text-left"
-                            : "text-right"
+                            ? "flex-row-reverse"
+                            : "flex-row"
                           : mine
-                            ? "text-left"
-                            : "text-right",
+                            ? "flex-row-reverse"
+                            : "flex-row",
                       )}
                     >
                       {/* {m.senderName && (
@@ -958,11 +1074,58 @@ export default function ChatPage() {
                           {m.senderName}
                         </span>
                       )} */}
-                      {m.time
-                        ? m.time
-                            .substring(11, 16)
-                            .replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)])
-                        : ""}
+                      <span className="tabular-nums">
+                        {m.time
+                          ? m.time
+                              .substring(11, 16)
+                              .replace(/\d/g, (d) => "۰۱۲۳۴۵۶۷۸۹"[Number(d)])
+                          : ""}
+                      </span>
+                      {canModify(m) && (
+                        <span className="relative inline-flex">
+                          <button
+                            type="button"
+                            onClick={() => setMenuId(menuId === m.id ? "" : m.id)}
+                            title="عملیات پیام"
+                            className="grid h-4 w-4 place-items-center rounded text-[13px] leading-none text-ink-400 transition hover:bg-ink-100 hover:text-ink-700"
+                          >
+                            ⋮
+                          </button>
+                          {menuId === m.id && (
+                            <span
+                              onClick={(e) => e.stopPropagation()}
+                              className={cn(
+                                "absolute bottom-full z-30 mb-1 w-20 overflow-hidden rounded-xl border border-ink-100 bg-white shadow-lg",
+                                mine || (isAdmin && senderIsPatient)
+                                  ? "-right-7"
+                                  : "left-0",
+                              )}
+                            >
+                              {m.type !== "voice" && m.type !== "file" && (
+                                <button
+                                  type="button"
+                                  onClick={() => startEdit(m)}
+                                  className="flex w-full items-center gap-2 px-3 py-2 text-xs text-ink-700 transition hover:bg-primary-50"
+                                >
+                                  <IconEdit className="h-3.5 w-3.5 text-primary-600" />
+                                  ویرایش
+                                </button>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setMenuId("");
+                                  setConfirmDeleteId(m.id);
+                                }}
+                                className="flex w-full items-center gap-2 px-3 py-2 text-xs text-red-600 transition hover:bg-red-50"
+                              >
+                                <IconTrash className="h-3.5 w-3.5" />
+                                حذف
+                              </button>
+                            </span>
+                          )}
+                        </span>
+                      )}
                     </p>
                   </div>
                 </div>
@@ -1364,6 +1527,34 @@ export default function ChatPage() {
             مشاهده جزئیات نسخه از طریق سرور امکان‌پذیر نیست.
           </p>
         )}
+      </Modal>
+
+      {/* ── Delete message confirm ── */}
+      <Modal
+        open={!!confirmDeleteId}
+        onClose={() => setConfirmDeleteId("")}
+        title="حذف پیام"
+        footer={
+          <>
+            <PrimaryButton
+              variant="danger"
+              onClick={() => confirmDeleteId && removeMessage(confirmDeleteId)}
+            >
+              بله، حذف شود
+            </PrimaryButton>
+            <PrimaryButton
+              variant="ghost"
+              onClick={() => setConfirmDeleteId("")}
+            >
+              انصراف
+            </PrimaryButton>
+          </>
+        }
+      >
+        <p className="text-sm leading-7 text-ink-600">
+          آیا از حذف این پیام مطمئن هستید؟ این عملیات برای همه شرکت‌کنندگان
+          انجام می‌شود و قابل بازگشت نیست.
+        </p>
       </Modal>
 
       {/* ── End session modal ── */}

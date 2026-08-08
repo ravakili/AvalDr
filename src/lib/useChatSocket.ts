@@ -20,6 +20,14 @@ export type WsMessageEvent =
       reason?: string
     }
   | WsStatusEvent
+  | {
+      event: "message_edited"
+      message?: ChatMessage
+    }
+  | {
+      event: "message_deleted"
+      messageId?: string
+    }
 
 interface UseChatSocketOptions {
   appointmentId: string
@@ -29,6 +37,8 @@ interface UseChatSocketOptions {
   onTyping?: (senderId: string) => void
   onStatusChange?: (connected: boolean) => void
   onStatus?: (payload: WsStatusEvent) => void
+  onMessageEdited?: (msg: ChatMessage) => void
+  onMessageDeleted?: (messageId: string) => void
 }
 
 function baseWsUrl(): string {
@@ -45,6 +55,8 @@ export function useChatSocket({
   onTyping,
   onStatusChange,
   onStatus,
+  onMessageEdited,
+  onMessageDeleted,
 }: UseChatSocketOptions) {
   const [connected, setConnected] = useState(false)
   const socketRef = useRef<WebSocket | null>(null)
@@ -52,8 +64,22 @@ export function useChatSocket({
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const closedByUserRef = useRef(false)
 
-  const handlersRef = useRef({ onMessage, onTyping, onStatusChange, onStatus })
-  handlersRef.current = { onMessage, onTyping, onStatusChange, onStatus }
+  const handlersRef = useRef({
+    onMessage,
+    onTyping,
+    onStatusChange,
+    onStatus,
+    onMessageEdited,
+    onMessageDeleted,
+  })
+  handlersRef.current = {
+    onMessage,
+    onTyping,
+    onStatusChange,
+    onStatus,
+    onMessageEdited,
+    onMessageDeleted,
+  }
 
   const sendRaw = useCallback((payload: unknown) => {
     const ws = socketRef.current
@@ -75,6 +101,17 @@ export function useChatSocket({
 
   const sendTyping = useCallback(
     () => sendRaw({ action: "typing" }),
+    [sendRaw],
+  )
+
+  const editMessage = useCallback(
+    (id: string, text: string) =>
+      sendRaw({ action: "edit", id, text }),
+    [sendRaw],
+  )
+
+  const deleteMessage = useCallback(
+    (id: string) => sendRaw({ action: "delete", id }),
     [sendRaw],
   )
 
@@ -134,6 +171,10 @@ export function useChatSocket({
           handlersRef.current.onTyping?.(parsed.senderId)
         } else if (parsed.event === "status") {
           handlersRef.current.onStatus?.(parsed)
+        } else if (parsed.event === "message_edited" && parsed.message) {
+          handlersRef.current.onMessageEdited?.(parsed.message)
+        } else if (parsed.event === "message_deleted" && parsed.messageId) {
+          handlersRef.current.onMessageDeleted?.(parsed.messageId)
         }
       }
       ws.onerror = () => {
@@ -173,5 +214,5 @@ export function useChatSocket({
     }
   }, [appointmentId, threadId, enabled])
 
-  return { connected, sendText, sendVoice, sendTyping, close }
+  return { connected, sendText, sendVoice, sendTyping, editMessage, deleteMessage, close }
 }

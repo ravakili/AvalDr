@@ -10,6 +10,11 @@ urlpatterns = [
         name='chat-messages',
     ),
     path(
+        'appointments/<int:appointment_id>/messages/<int:message_id>/',
+        ChatMessageViewSet.as_view({'patch': 'update', 'delete': 'destroy'}),
+        name='chat-message-detail',
+    ),
+    path(
         'support/threads/',
         SupportThreadViewSet.as_view({'get': 'list', 'post': 'create'}),
         name='chat-support-threads',

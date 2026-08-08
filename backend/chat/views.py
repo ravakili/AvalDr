@@ -59,6 +59,53 @@ class ChatMessageViewSet(viewsets.GenericViewSet):
                 )
         return Response(ChatMessageSerializer(message, context={'request': request}).data, status=status.HTTP_201_CREATED)
 
+    def _get_appointment_message(self, request, appointment_id, message_id):
+        appointment = appointment_for_user(request.user, appointment_id)
+        if not appointment:
+            return None, Response({'detail': 'دسترسی به این گفتگو مجاز نیست.'}, status=403)
+        message = get_object_or_404(ChatMessage, pk=message_id, appointment=appointment)
+        return appointment, None
+
+    @staticmethod
+    def _can_modify(request, appointment, message):
+        if message.message_type in ('prescription', 'system'):
+            return request.user.role == 'admin' or (
+                request.user.role == 'doctor' and appointment.doctor.user_id == request.user.pk
+            )
+        if request.user.role == 'admin':
+            return True
+        if message.sender_id == request.user.pk:
+            return True
+        return request.user.role == 'doctor' and appointment.doctor.user_id == request.user.pk
+
+    def update(self, request, appointment_id=None, message_id=None):
+        appointment, error = self._get_appointment_message(request, appointment_id, message_id)
+        if error:
+            return error
+        if not self._can_modify(request.user, appointment, appointment.messages.get(pk=message_id)):
+            return Response({'detail': 'ویرایش این پیام مجاز نیست.'}, status=403)
+        message = ChatMessage.objects.filter(pk=message_id, appointment=appointment).first()
+        if message.message_type in ('prescription', 'system', 'voice', 'file'):
+            return Response({'detail': 'این پیام قابلیت ویرایش ندارد.'}, status=400)
+        text = (request.data.get('text') or '').strip()
+        if not text:
+            return Response({'detail': 'متن پیام الزامی است.'}, status=400)
+        message.text = text
+        message.save(update_fields=['text'])
+        return Response(ChatMessageSerializer(message, context={'request': request}).data)
+
+    def destroy(self, request, appointment_id=None, message_id=None):
+        appointment, error = self._get_appointment_message(request, appointment_id, message_id)
+        if error:
+            return error
+        message = ChatMessage.objects.filter(pk=message_id, appointment=appointment).first()
+        if not message:
+            return Response(status=status.HTTP_404_NOT_FOUND)
+        if not self._can_modify(request.user, appointment, message):
+            return Response({'detail': 'حذف این پیام مجاز نیست.'}, status=403)
+        message.delete()
+        return Response({'deleted': message_id}, status=status.HTTP_204_NO_CONTENT)
+
 
 class ChatRoomViewSet(viewsets.GenericViewSet):
     permission_classes = (IsActiveUser,)
@@ -131,6 +178,38 @@ class SupportThreadViewSet(viewsets.GenericViewSet):
                 thread.messages.all(), many=True, context={'request': request}
             ).data
         )
+
+    @staticmethod
+    def _can_modify_support(request, message):
+        return request.user.role == 'admin' or message.sender_id == request.user.pk
+
+    @action(detail=True, methods=('patch',), url_path=r'messages/(?P<message_id>\d+)')
+    def message_update(self, request, pk=None, message_id=None):
+        thread = self._get_accessible(request, pk)
+        if not thread:
+            return Response({'detail': 'دسترسی به این گفتگو مجاز نیست.'}, status=403)
+        message = get_object_or_404(SupportMessage, pk=message_id, thread=thread)
+        if not self._can_modify_support(request, message):
+            return Response({'detail': 'ویرایش این پیام مجاز نیست.'}, status=403)
+        text = (request.data.get('text') or '').strip()
+        if not text:
+            return Response({'detail': 'متن پیام الزامی است.'}, status=400)
+        message.text = text
+        message.save(update_fields=['text'])
+        return Response(
+            SupportMessageSerializer(message, context={'request': request}).data
+        )
+
+    @action(detail=True, methods=('delete',), url_path=r'messages/(?P<message_id>\d+)')
+    def message_delete(self, request, pk=None, message_id=None):
+        thread = self._get_accessible(request, pk)
+        if not thread:
+            return Response({'detail': 'دسترسی به این گفتگو مجاز نیست.'}, status=403)
+        message = get_object_or_404(SupportMessage, pk=message_id, thread=thread)
+        if not self._can_modify_support(request, message):
+            return Response({'detail': 'حذف این پیام مجاز نیست.'}, status=403)
+        message.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
     @action(detail=True, methods=('post',))
     def send(self, request, pk=None):

@@ -79,15 +79,17 @@ class DoctorViewSet(viewsets.ReadOnlyModelViewSet):
                 status__in=('pending-payment', 'pending-approval', 'waiting', 'in-progress'),
             ).values_list('time', flat=True)
         )
+        now = datetime.now()
         slots = []
         for working_hour in working_hours:
             current = datetime.combine(target, working_hour.from_time)
             end = datetime.combine(target, working_hour.to_time)
             while current + timedelta(minutes=30) <= end:
                 current_time = current.time()
+                past_slot = target == date.today() and current <= now
                 slots.append({
                     'time': current_time.strftime('%H:%M'),
-                    'available': current_time not in occupied,
+                    'available': current_time not in occupied and not past_slot,
                 })
                 current += timedelta(minutes=30 + working_hour.break_minutes)
         return Response({'date': target.isoformat(), 'slots': slots})

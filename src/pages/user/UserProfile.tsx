@@ -3,6 +3,7 @@ import GlassCard from "../../components/ui/GlassCard";
 import PrimaryButton from "../../components/ui/PrimaryButton";
 import Avatar from "../../components/ui/Avatar";
 import InputField, { SelectField } from "../../components/ui/InputField";
+import JalaliDateSelect from "../../components/ui/JalaliDateSelect";
 import Toggle from "../../components/ui/Toggle";
 import Tabs from "../../components/ui/Tabs";
 import Badge from "../../components/ui/Badge";
@@ -55,6 +56,7 @@ export default function UserProfile() {
         name: profile.name || "",
         phone: profile.phone || "",
         nationalId: profile.nationalId || "",
+        dateOfBirth: profile.dateOfBirth || "",
         age: String(profile.age || ""),
         gender: profile.gender || "male",
         city: profile.city || "",
@@ -121,6 +123,8 @@ export default function UserProfile() {
     if (formData.name !== profile?.name) payload.name = formData.name;
     if (formData.city !== profile?.city) payload.city = formData.city;
     if (formData.nationalId !== profile?.nationalId) payload.nationalId = formData.nationalId;
+    if ((formData.dateOfBirth || "") !== (profile?.dateOfBirth || ""))
+      payload.dateOfBirth = formData.dateOfBirth || null;
     if (formData.gender !== profile?.gender) payload.gender = formData.gender;
     if (formData.bloodType !== profile?.bloodType) payload.bloodType = formData.bloodType;
     if (formData.insuranceType !== profile?.insuranceType) payload.insuranceType = formData.insuranceType;
@@ -258,6 +262,13 @@ export default function UserProfile() {
                 value={formData.nationalId}
                 onChange={(e) => setFormData(f => ({ ...f, nationalId: e.target.value }))}
                 name="nid"
+              />
+              <JalaliDateSelect
+                label="تاریخ تولد (شمسی)"
+                value={formData.dateOfBirth}
+                onChange={(iso) =>
+                  setFormData((f) => ({ ...f, dateOfBirth: iso }))
+                }
               />
               <SelectField
                 label="جنسیت"

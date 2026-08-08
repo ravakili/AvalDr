@@ -93,6 +93,23 @@ class ChatConsumer(AppointmentConsumer):
             )
             return
 
+        if action == 'edit':
+            message = await self.edit_message(data)
+            if message:
+                await self.channel_layer.group_send(
+                    self.room_group,
+                    {'type': 'chat_edit', 'message': self.build_payload(message)},
+                )
+            return
+
+        if action == 'delete':
+            deleted_id = await self.delete_message(data)
+            if deleted_id:
+                await self.channel_layer.group_send(
+                    self.room_group, {'type': 'chat_delete', 'messageId': deleted_id}
+                )
+            return
+
         if data.get('type') == 'voice':
             message = await self.create_voice_message(data)
         else:
@@ -134,11 +151,70 @@ class ChatConsumer(AppointmentConsumer):
     async def chat_message(self, event):
         await self.send(text_data=json.dumps({'event': 'message', 'message': event['message']}))
 
+    async def chat_edit(self, event):
+        await self.send(
+            text_data=json.dumps({'event': 'message_edited', 'message': event['message']})
+        )
+
+    async def chat_delete(self, event):
+        await self.send(
+            text_data=json.dumps({'event': 'message_deleted', 'messageId': event['messageId']})
+        )
+
     async def typing_event(self, event):
         if event['sender'] != self.channel_name:
             await self.send(
                 text_data=json.dumps({'event': 'typing', 'senderId': event['senderId']})
             )
+
+    @staticmethod
+    def _can_modify_message(message, user):
+        if message.message_type in ('prescription', 'system'):
+            return user.role == 'admin' or (
+                user.role == 'doctor' and message.appointment.doctor.user_id == user.pk
+            )
+        if user.role == 'admin':
+            return True
+        if message.sender_id == user.pk:
+            return True
+        return user.role == 'doctor' and message.appointment.doctor.user_id == user.pk
+
+    @database_sync_to_async
+    def edit_message(self, data):
+        from chat.models import ChatMessage
+
+        user = self.scope['user']
+        message = (
+            ChatMessage.objects.select_related('appointment__doctor__user')
+            .filter(pk=data.get('id'), appointment_id=self.appointment_id)
+            .first()
+        )
+        if not message or not self._can_modify_message(message, user):
+            return None
+        if message.message_type not in ('text',):
+            return None
+        text = (data.get('text') or '').strip()
+        if not text:
+            return None
+        message.text = text
+        message.save(update_fields=['text'])
+        return message
+
+    @database_sync_to_async
+    def delete_message(self, data):
+        from chat.models import ChatMessage
+
+        user = self.scope['user']
+        message = (
+            ChatMessage.objects.select_related('appointment__doctor__user')
+            .filter(pk=data.get('id'), appointment_id=self.appointment_id)
+            .first()
+        )
+        if not message or not self._can_modify_message(message, user):
+            return None
+        message_id = str(message.pk)
+        message.delete()
+        return message_id
 
     async def status_event(self, event):
         await self.send(
@@ -258,6 +334,23 @@ class SupportConsumer(AsyncWebsocketConsumer):
             )
             return
 
+        if action == 'edit':
+            message = await self.edit_message(data)
+            if message:
+                await self.channel_layer.group_send(
+                    self.room_group,
+                    {'type': 'chat_edit', 'message': self.build_payload(message)},
+                )
+            return
+
+        if action == 'delete':
+            deleted_id = await self.delete_message(data)
+            if deleted_id:
+                await self.channel_layer.group_send(
+                    self.room_group, {'type': 'chat_delete', 'messageId': deleted_id}
+                )
+            return
+
         message = await self.create_message(data)
         payload = self.build_payload(message)
         await self.channel_layer.group_send(
@@ -293,11 +386,56 @@ class SupportConsumer(AsyncWebsocketConsumer):
     async def chat_message(self, event):
         await self.send(text_data=json.dumps({'event': 'message', 'message': event['message']}))
 
+    async def chat_edit(self, event):
+        await self.send(
+            text_data=json.dumps({'event': 'message_edited', 'message': event['message']})
+        )
+
+    async def chat_delete(self, event):
+        await self.send(
+            text_data=json.dumps({'event': 'message_deleted', 'messageId': event['messageId']})
+        )
+
     async def typing_event(self, event):
         if event['sender'] != self.channel_name:
             await self.send(
                 text_data=json.dumps({'event': 'typing', 'senderId': event['senderId']})
             )
+
+    @database_sync_to_async
+    def edit_message(self, data):
+        from chat.models import SupportMessage
+
+        user = self.scope['user']
+        message = SupportMessage.objects.filter(
+            pk=data.get('id'), thread_id=self.thread_id
+        ).first()
+        if not message:
+            return None
+        if user.role != 'admin' and message.sender_id != user.pk:
+            return None
+        text = (data.get('text') or '').strip()
+        if not text:
+            return None
+        message.text = text
+        message.save(update_fields=['text'])
+        return message
+
+    @database_sync_to_async
+    def delete_message(self, data):
+        from chat.models import SupportMessage
+
+        user = self.scope['user']
+        message = SupportMessage.objects.filter(
+            pk=data.get('id'), thread_id=self.thread_id
+        ).first()
+        if not message:
+            return None
+        if user.role != 'admin' and message.sender_id != user.pk:
+            return None
+        message_id = str(message.pk)
+        message.delete()
+        return message_id
 
     @database_sync_to_async
     def create_message(self, data):
