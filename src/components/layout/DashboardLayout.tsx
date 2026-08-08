@@ -41,7 +41,10 @@ const titles: Record<string, { title: string; subtitle?: string }> = {
     title: "نوبت‌های من",
     subtitle: "مدیریت نوبت‌های قبلی و آینده",
   },
-  "/user/profile": { title: "پروفایل", subtitle: "اطلاعات حساب کاربری و پرونده" },
+  "/user/profile": {
+    title: "پروفایل",
+    subtitle: "اطلاعات حساب کاربری و پرونده",
+  },
   "/user/consult": { title: "اتاق مشاوره", subtitle: "گفتگو با پزشک" },
   "/doctor/appointments": {
     title: "نوبت‌ها",
@@ -65,9 +68,15 @@ const titles: Record<string, { title: string; subtitle?: string }> = {
     subtitle: "تأیید، تعلیق و مدیریت پزشکان",
   },
   "/admin/users": { title: "مدیریت کاربران", subtitle: "حساب‌های بیماران" },
-  "/admin/definitions": { title: "تعاریف سیستم", subtitle: "مدیریت تخصص‌ها، تشخیص‌ها، داروها و ..." },
+  "/admin/definitions": {
+    title: "تعاریف سیستم",
+    subtitle: "مدیریت تخصص‌ها، تشخیص‌ها، داروها و ...",
+  },
   "/admin/logs": { title: "لاگ نوبت‌ها", subtitle: "سوابق و گزارش فعالیت‌ها" },
-  "/admin/withdrawals": { title: "درخواست‌های برداشت", subtitle: "مدیریت تسویه پزشکان" },
+  "/admin/withdrawals": {
+    title: "درخواست‌های برداشت",
+    subtitle: "مدیریت تسویه پزشکان",
+  },
   "/admin/settings": { title: "تنظیمات سیستم", subtitle: "پیکربندی پلتفرم" },
 };
 
@@ -88,10 +97,12 @@ export default function DashboardLayout({ role }: Props) {
       .sort((a, b) => b.length - a.length)[0] || `/${role}`;
 
   const meta = titles[key] || titles[`/${role}`];
-  const title = key === `/${role}`
-    ? `${greetings[role]}${user?.name ? `، ${user.name.split(" ")[0]}` : ''} 👋`
-    : meta.title;
-  const subtitle = key === `/${role}` ? meta.subtitle || subtitles[role] : meta.subtitle;
+  const title =
+    key === `/${role}`
+      ? `${greetings[role]}${user?.name ? `، ${user.name.split(" ")[0]}` : ""} 👋`
+      : meta.title;
+  const subtitle =
+    key === `/${role}` ? meta.subtitle || subtitles[role] : meta.subtitle;
 
   return (
     <div className="flex min-h-screen gap-5 p-4 lg:p-6">
@@ -101,18 +112,6 @@ export default function DashboardLayout({ role }: Props) {
         <Sidebar role={role} />
       </div>
 
-      {/* Sidebar (mobile drawer) */}
-      {mobileOpen && (
-        <div className="fixed inset-0 z-40 lg:hidden">
-          <div
-            className="absolute inset-0 bg-ink-900/30 backdrop-blur-sm"
-            onClick={() => setMobileOpen(false)}
-          />
-          <div className="absolute right-0 top-0 h-full w-72 animate-fade-in p-3">
-            <Sidebar role={role} onNavigate={() => setMobileOpen(false)} />
-          </div>
-        </div>
-      )}
 
       {/* Main */}
       <main className="flex min-w-0 flex-1 flex-col">

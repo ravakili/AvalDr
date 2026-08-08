@@ -133,7 +133,12 @@ export default function DoctorProfile() {
   useEffect(() => {
     const fetchDefs = async () => {
       try {
-        const types = ["prefix", "city", "insurance_type", "supplementary_insurance"];
+        const types = [
+          "prefix",
+          "city",
+          "insurance_type",
+          "supplementary_insurance",
+        ];
         const results = await Promise.all(
           types.map(async (t) => {
             const data = await api.get<{ id: string; name: string }[]>(
@@ -371,7 +376,7 @@ export default function DoctorProfile() {
           <div className="flex w-full items-center justify-end gap-3">
             <button
               onClick={logout}
-              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-ink-400 transition text-red-300 hover:border-red-500 border-red-300 border-2 hover:bg-red-50 hover:text-red-500"
+              className="grid h-8 w-8 shrink-0 place-items-center rounded-lg  hover:text-ink-100 transition text-red-300 hover:border-red-500 border-red-300 border-2 hover:bg-red-500 hover:text-red-500"
               title="خروج"
             >
               <IconLogout />

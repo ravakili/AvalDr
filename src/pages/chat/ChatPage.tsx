@@ -690,7 +690,7 @@ export default function ChatPage() {
                     </div>
                   )} */}
                 <div className="flex gap-2">
-                  {!isAdminChat && activeAppt?.status === "in-progress" && (
+                  {/* {!isAdminChat && activeAppt?.status === "in-progress" && (
                     <>
                       {!videoActive ? (
                         <PrimaryButton
@@ -711,7 +711,7 @@ export default function ChatPage() {
                         </PrimaryButton>
                       )}
                     </>
-                  )}
+                  )} */}
                   {(isDoctor || isAdmin) &&
                     !isAdminChat &&
                     activeAppt?.status === "waiting" && (
@@ -887,7 +887,7 @@ export default function ChatPage() {
                       className={cn(
                         "rounded-2xl px-4 py-2.5 text-sm leading-7 shadow-sm",
                         isPrescription
-                          ? "border border-primary-200 bg-primary-50/90 text-ink-800 cursor-pointer hover:bg-primary-100/90"
+                          ? "border border-primary-200 bg-primary-100 text-ink-800 cursor-pointer hover:bg-primary-100/90"
                           : mine
                             ? "rounded-tr-sm bg-primary-500 text-white"
                             : "rounded-tl-sm bg-white/80 text-ink-800 ",
@@ -1506,7 +1506,7 @@ function ChatList({
               onClick={() => onSelect(a.id)}
               className={cn(
                 "flex w-full items-center gap-3 px-4 py-3 text-right transition",
-                activeId === a.id ? "bg-primary-50/80" : "hover:bg-white/40",
+                activeId === a.id ? "bg-primary-100" : "hover:bg-white/40",
               )}
             >
               {isAdmin ? (
